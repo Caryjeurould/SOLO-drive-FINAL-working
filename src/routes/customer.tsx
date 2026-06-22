@@ -7,9 +7,8 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import {
   MapPin, Navigation, Clock, ShieldCheck, Sparkles, ArrowRight,
-  CheckCircle2, FileText, Star, X, Loader2,
+  FileText, Star, X, Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { DownloadPopup } from "@/components/DownloadPopup";
 
 export const Route = createFileRoute("/customer")({
@@ -31,10 +30,6 @@ function CustomerBooking() {
     const timer = setTimeout(() => setShowPopup(true), 15000);
     return () => clearTimeout(timer);
   }, []);
-  const [signed, setSigned] = useState<boolean>(() =>
-    typeof window !== "undefined" ? localStorage.getItem("solo.consent") === "1" : true,
-  );
-
   const [pickup, setPickup] = useState("1333 Camelback Rd, Phoenix, AZ");
   const [dropoff, setDropoff] = useState("14765 Scottsdale Rd, Scottsdale, AZ");
   const [event, setEvent] = useState(false);
@@ -60,18 +55,6 @@ function CustomerBooking() {
     sessionStorage.setItem("solo.trip", JSON.stringify({ pickup, dropoff }));
     navigate({ to: "/customer/trip" });
   };
-
-  if (!signed) {
-    return (
-      <AppShell>
-        {showPopup && <DownloadPopup onClose={() => setShowPopup(false)} />}
-        <ConsentGate onAgree={() => {
-          localStorage.setItem("solo.consent", "1");
-          setSigned(true);
-        }} />
-      </AppShell>
-    );
-  }
 
   return (
     <AppShell>
@@ -204,92 +187,6 @@ function Pill({ icon, label, value }: { icon: React.ReactNode; label: string; va
 
 function Row({ k, v }: { k: string; v: string }) {
   return <><span>{k}</span><span className="text-right text-foreground/80">{v}</span></>;
-}
-
-function ConsentGate({ onAgree }: { onAgree: () => void }) {
-  const [scrolled, setScrolled] = useState(false);
-  const [signature, setSignature] = useState("");
-  const canSign = scrolled && signature.trim().length > 2;
-
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-12 md:px-8">
-      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Consent gate</div>
-      <h1 className="mt-2 font-display text-4xl font-semibold">Disclosure & Release of Responsibility</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        SOLO.drive connects you with independent operators. We don't employ them.
-        Please read the agreement below in full before requesting a ride.
-      </p>
-
-      <div
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          if (el.scrollTop + el.clientHeight >= el.scrollHeight - 12) setScrolled(true);
-        }}
-        className="mt-6 h-72 overflow-y-auto rounded-2xl border border-border bg-card p-5 text-sm leading-relaxed text-muted-foreground"
-      >
-        <p>
-          <strong className="text-foreground">1. Independent Operators.</strong> Each driver on SOLO.drive is a self-employed operator
-          carrying their own commercial insurance and credentials. SOLO.drive is a software platform; it is not the carrier of record.
-        </p>
-        <p className="mt-3">
-          <strong className="text-foreground">2. Verification.</strong> You acknowledge that operator credentials are made available
-          to you via the Verify Driver function. You are encouraged to inspect them before entering the vehicle.
-        </p>
-        <p className="mt-3">
-          <strong className="text-foreground">3. Smart Rate.</strong> Fares are calculated by the Smart Rate engine using distance,
-          time of day, day of week, regional fuel index and event multipliers. The rate shown at confirmation is final and binding
-          for both parties.
-        </p>
-        <p className="mt-3">
-          <strong className="text-foreground">4. Release.</strong> To the maximum extent permitted by law, you release SOLO.drive
-          from liability arising out of acts or omissions of independent operators, except where caused by our gross negligence.
-        </p>
-        <p className="mt-3">
-          <strong className="text-foreground">5. Data.</strong> Real-time location is shared between you and your operator only for
-          the duration of the active trip. It is purged within 30 days.
-        </p>
-        <p className="mt-3">
-          <strong className="text-foreground">6. Reporting.</strong> Issues should be reported in-app within 48 hours of the trip
-          to enable mediation.
-        </p>
-        <p className="mt-3">
-          <strong className="text-foreground">7. Acceptance.</strong> Scrolling to the bottom and signing your full legal name
-          constitutes acceptance of the entire agreement.
-        </p>
-      </div>
-
-      <div className="mt-4 flex items-center gap-2 text-xs">
-        <CheckCircle2 className={cn("h-4 w-4", scrolled ? "text-success" : "text-muted-foreground/40")} />
-        <span className={cn(scrolled ? "text-success" : "text-muted-foreground")}>
-          {scrolled ? "Read in full." : "Scroll to the end to enable signature."}
-        </span>
-      </div>
-
-      <div className="mt-4">
-        <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Type your full legal name</label>
-        <input
-          value={signature}
-          onChange={(e) => setSignature(e.target.value)}
-          placeholder="Jane A. Doe"
-          disabled={!scrolled}
-          className="mt-1 w-full rounded-xl border border-input bg-surface px-4 py-3 font-display text-2xl tracking-tight italic outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-        />
-      </div>
-
-      <button
-        disabled={!canSign}
-        onClick={onAgree}
-        className={cn(
-          "mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-medium transition",
-          canSign
-            ? "bg-gradient-primary text-primary-foreground shadow-glow hover:scale-[1.01]"
-            : "cursor-not-allowed bg-muted text-muted-foreground/60",
-        )}
-      >
-        Sign & continue <ArrowRight className="h-4 w-4" />
-      </button>
-    </div>
-  );
 }
 
 function VerifyDialog({ onClose }: { onClose: () => void }) {
