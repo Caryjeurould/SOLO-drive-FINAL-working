@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { sendOperatorSuspensionEmail, sendOperatorReinstatementEmail } from "@/lib/email.server";
+import { sendOperatorSuspensionEmail, sendOperatorReinstatementEmail } from "@/lib/email";
 import type { OperatorProfile } from "@/hooks/useOperatorProfile";
 import type { OperatorDocument } from "@/hooks/useDocuments";
 import type { Trip } from "@/hooks/useTrips";
