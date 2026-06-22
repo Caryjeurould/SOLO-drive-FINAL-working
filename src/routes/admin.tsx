@@ -11,11 +11,15 @@ import {
   useLogAdminEvent,
   useIssueSuspension,
   useReinstateOperator,
+  useIssueRiderSuspension,
+  useReinstateRider,
   useAdminVerifyDocument,
   useUpdateAdminUser,
   hasRole,
+  SUSPENSION_CATEGORIES,
+  ABUSE_SUSPENSION_CATEGORIES,
 } from "@/hooks/useAdmin";
-import type { AdminOperatorRow, AdminRiderRow, AdminUser, AdminRole, AuditLogEntry } from "@/hooks/useAdmin";
+import type { AdminOperatorRow, AdminRiderRow, AdminUser, AdminRole, AuditLogEntry, SuspensionCategory } from "@/hooks/useAdmin";
 import { computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
 import { LEGAL_DOCS } from "@/lib/onboarding";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -188,7 +192,7 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
             ) : (
               <div className="space-y-6">
                 {riders.map((r) => (
-                  <RiderCard key={r.id} rider={r} />
+                  <RiderCard key={r.id} rider={r} admin={admin} />
                 ))}
               </div>
             )}
@@ -406,11 +410,20 @@ function OperatorCard({ operator, admin }: { operator: AdminOperatorRow; admin: 
   );
 }
 
-function RiderCard({ rider }: { rider: AdminRiderRow }) {
+function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser }) {
   const [expanded, setExpanded] = useState(false);
+  const [suspendOpen, setSuspendOpen] = useState(false);
+  const [suspendCategory, setSuspendCategory] = useState<SuspensionCategory | "">("");
+  const [suspendDescription, setSuspendDescription] = useState("");
+  const [reinstateOpen, setReinstateOpen] = useState(false);
   const logEvent = useLogAdminEvent();
+  const issueSuspension = useIssueRiderSuspension();
+  const reinstateRider = useReinstateRider();
+
+  const canWrite = hasRole(admin, "compliance");
   const fullName = [rider.first_name, rider.last_name].filter(Boolean).join(" ") || "Unnamed rider";
   const cleared = rider.bg_status === "cleared";
+  const suspended = rider.status === "suspended";
 
   const handleToggleExpand = () => {
     const next = !expanded;
@@ -425,14 +438,38 @@ function RiderCard({ rider }: { rider: AdminRiderRow }) {
     }
   };
 
+  const handleSuspend = () => {
+    if (!suspendCategory || !suspendDescription.trim()) return;
+    issueSuspension.mutate(
+      {
+        riderId: rider.id,
+        riderEmail: rider.email,
+        riderName: fullName,
+        category: suspendCategory,
+        description: suspendDescription.trim(),
+      },
+      { onSuccess: () => { setSuspendCategory(""); setSuspendDescription(""); setSuspendOpen(false); } },
+    );
+  };
+
+  const handleReinstate = () => {
+    reinstateRider.mutate(
+      { riderId: rider.id, riderEmail: rider.email, riderName: fullName },
+      { onSuccess: () => setReinstateOpen(false) },
+    );
+  };
+
   return (
     <div className="rounded-3xl border border-border bg-gradient-surface p-6 shadow-card">
       <button onClick={handleToggleExpand} className="flex w-full flex-wrap items-start justify-between gap-3 text-left">
         <div>
           <div className="font-display text-xl font-semibold">{fullName}</div>
-          <div className="text-xs text-muted-foreground">{rider.phone ?? "—"} · DOB {rider.dob ?? "—"}</div>
+          <div className="text-xs text-muted-foreground">{rider.email ?? "—"} · {rider.phone ?? "—"} · DOB {rider.dob ?? "—"}</div>
         </div>
         <div className="flex items-center gap-2">
+          <span className={cn("rounded-full px-3 py-1 text-xs", suspended ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>
+            {rider.status ?? "active"}
+          </span>
           <span className={cn("rounded-full px-3 py-1 text-xs", cleared ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>
             {rider.bg_status ?? "pending"}
           </span>
@@ -453,7 +490,11 @@ function RiderCard({ rider }: { rider: AdminRiderRow }) {
 
           <SectionCard title="Sign-up Disclosures" icon={<FileText className="h-3.5 w-3.5" />}>
             <FieldRow label="Disclosure & release consent" value={rider.consent_signed ? "Signed" : "Not signed"} ok={!!rider.consent_signed} />
-            <PlaceholderRow label="Consent signature timestamp" />
+            <FieldRow
+              label="Signed at"
+              value={rider.consent_signed_at ? new Date(rider.consent_signed_at).toLocaleString() : "—"}
+              ok={!!rider.consent_signed_at}
+            />
           </SectionCard>
 
           <SectionCard title="Dispute Resolution" icon={<Gavel className="h-3.5 w-3.5" />}>
@@ -475,6 +516,100 @@ function RiderCard({ rider }: { rider: AdminRiderRow }) {
                 ? `${rider.incidents.length} incident report(s) on file — see safety_incidents (not the same as a signed acknowledgment).`
                 : "No incident reports on file."}
             </p>
+          </SectionCard>
+
+          <SectionCard title="Suspension History" icon={<Ban className="h-3.5 w-3.5" />}>
+            {rider.suspensions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No suspensions on record.</p>
+            ) : (
+              rider.suspensions.map((s) => (
+                <FieldRow
+                  key={s.id}
+                  label={new Date(s.created_at).toLocaleDateString()}
+                  value={[s.category, s.description].filter(Boolean).join(" — ") || s.status || "Suspended"}
+                  ok={s.status === "resolved"}
+                />
+              ))
+            )}
+
+            {canWrite && suspended && (
+              reinstateOpen ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Reinstate and email a confirmation?</span>
+                  <button
+                    onClick={handleReinstate}
+                    disabled={reinstateRider.isPending}
+                    className="rounded-lg bg-success px-3 py-1.5 text-xs font-medium text-success-foreground disabled:opacity-50"
+                  >
+                    {reinstateRider.isPending ? "Reinstating…" : "Confirm reinstatement"}
+                  </button>
+                  <button onClick={() => setReinstateOpen(false)} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setReinstateOpen(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/5 px-3 py-1.5 text-xs text-success hover:bg-success/10"
+                >
+                  <CheckCircle2 className="h-3 w-3" /> Reinstate / Approve
+                </button>
+              )
+            )}
+            {reinstateRider.data?.emailSent === false && (
+              <p className="text-[11px] text-warning">Rider reinstated, but the confirmation email failed to send.</p>
+            )}
+
+            {canWrite && !suspended && (
+              suspendOpen ? (
+                <div className="mt-2 space-y-2">
+                  <select
+                    value={suspendCategory}
+                    onChange={(e) => setSuspendCategory(e.target.value as SuspensionCategory)}
+                    className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="" disabled>Select a category…</option>
+                    {SUSPENSION_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <textarea
+                    value={suspendDescription}
+                    onChange={(e) => setSuspendDescription(e.target.value)}
+                    placeholder="Description…"
+                    rows={2}
+                    className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {suspendCategory && ABUSE_SUSPENSION_CATEGORIES.has(suspendCategory) && (
+                    <p className="text-[11px] text-warning">
+                      This category will also create a linked safety incident report.
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSuspend}
+                      disabled={!suspendCategory || !suspendDescription.trim() || issueSuspension.isPending}
+                      className="rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground disabled:opacity-50"
+                    >
+                      {issueSuspension.isPending ? "Submitting…" : "Confirm suspension"}
+                    </button>
+                    <button onClick={() => setSuspendOpen(false)} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setSuspendOpen(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
+                >
+                  <Ban className="h-3 w-3" /> Issue suspension
+                </button>
+              )
+            )}
+            {issueSuspension.data?.emailSent === false && (
+              <p className="text-[11px] text-warning">Rider suspended, but the notification email failed to send.</p>
+            )}
           </SectionCard>
 
           <SectionCard title="Account" icon={<User className="h-3.5 w-3.5" />}>

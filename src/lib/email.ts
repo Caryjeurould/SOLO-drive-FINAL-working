@@ -95,3 +95,46 @@ export const sendOperatorReinstatementEmail = createServerFn({ method: "POST" })
     });
     return { ok: true as const };
   });
+
+export const sendRiderSuspensionEmail = createServerFn({ method: "POST" })
+  .inputValidator((data: { to: string; riderName: string; category: string; reason: string }) => data)
+  .handler(async ({ data }) => {
+    const name = escapeHtml(data.riderName);
+    const category = escapeHtml(data.category);
+    const reason = escapeHtml(data.reason);
+    await sendViaResend({
+      to: data.to,
+      subject: "Your SOLO.drive rider account has been suspended",
+      html: emailShell(
+        "Account suspended",
+        `
+          <p>Hi ${name},</p>
+          <p>Your SOLO.drive rider account has been suspended by our compliance team.</p>
+          <p><strong>Category:</strong> ${category}</p>
+          <blockquote style="border-left: 3px solid #999; margin: 16px 0; padding: 4px 16px; color: #333;">${reason}</blockquote>
+          <p>You will not be able to book rides while your account is suspended.</p>
+          <p><strong>To request reinstatement:</strong> reply to this email or contact SOLO.drive support with information or documentation addressing the issue above. A compliance team member will review your account and restore access once the issue has been resolved.</p>
+        `,
+      ),
+    });
+    return { ok: true as const };
+  });
+
+export const sendRiderReinstatementEmail = createServerFn({ method: "POST" })
+  .inputValidator((data: { to: string; riderName: string }) => data)
+  .handler(async ({ data }) => {
+    const name = escapeHtml(data.riderName);
+    await sendViaResend({
+      to: data.to,
+      subject: "Your SOLO.drive rider account has been reinstated",
+      html: emailShell(
+        "Account reinstated",
+        `
+          <p>Hi ${name},</p>
+          <p>Good news — your SOLO.drive rider account has been reviewed by our compliance team and reinstated. You can resume booking rides immediately.</p>
+          <p>Thanks for your patience while we resolved this.</p>
+        `,
+      ),
+    });
+    return { ok: true as const };
+  });

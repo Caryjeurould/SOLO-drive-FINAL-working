@@ -159,9 +159,10 @@ function CustomerSignup() {
               onBack={() => setStage(1)}
             />
           )}
-          {stage === 3 && identityData && userId && (
+          {stage === 3 && identityData && userId && accountData && (
             <Stage3
               userId={userId}
+              email={accountData.email}
               identityData={identityData}
               onComplete={() => setDone(true)}
               onBack={() => setStage(2)}
@@ -311,8 +312,9 @@ function Stage2({ onNext, onBack }: { onNext: (data: IdentityData) => void; onBa
 }
 
 // ── Stage 3: Background Check + Payment ──────────────────────────────────────
-function Stage3({ userId, identityData, onComplete, onBack }: {
+function Stage3({ userId, email, identityData, onComplete, onBack }: {
   userId: string;
+  email: string;
   identityData: IdentityData;
   onComplete: () => void;
   onBack: () => void;
@@ -338,6 +340,7 @@ function Stage3({ userId, identityData, onComplete, onBack }: {
       // Save rider profile to Supabase
       await supabase.from("riders").upsert({
         id: userId,
+        email,
         first_name: identityData.firstName,
         last_name: identityData.lastName,
         phone: identityData.phone,

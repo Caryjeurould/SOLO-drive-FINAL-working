@@ -1,12 +1,38 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { sendOperatorSuspensionEmail, sendOperatorReinstatementEmail } from "@/lib/email";
+import {
+  sendOperatorSuspensionEmail,
+  sendOperatorReinstatementEmail,
+  sendRiderSuspensionEmail,
+  sendRiderReinstatementEmail,
+} from "@/lib/email";
 import type { OperatorProfile } from "@/hooks/useOperatorProfile";
 import type { OperatorDocument } from "@/hooks/useDocuments";
 import type { Trip } from "@/hooks/useTrips";
 
 export type AdminRole = "super_admin" | "compliance" | "viewer";
+
+export const SUSPENSION_CATEGORIES = [
+  "Physical abuse",
+  "Sexual abuse",
+  "Verbal abuse",
+  "Racial discrimination",
+  "Non-payment",
+  "Legal disclosure not agreed to",
+  "Background check not approved",
+  "Other",
+] as const;
+
+export type SuspensionCategory = (typeof SUSPENSION_CATEGORIES)[number];
+
+/** Categories that also generate a linked safety_incidents row alongside the suspension flag. */
+export const ABUSE_SUSPENSION_CATEGORIES = new Set<SuspensionCategory>([
+  "Physical abuse",
+  "Sexual abuse",
+  "Verbal abuse",
+  "Racial discrimination",
+]);
 
 export type AdminUser = {
   id: string;
@@ -19,13 +45,17 @@ export type AdminUser = {
 
 export type Rider = {
   id: string;
+  email: string | null;
   first_name: string | null;
   last_name: string | null;
   dob: string | null;
   phone: string | null;
   bg_status: string | null;
   consent_signed: boolean | null;
+  consent_signed_at: string | null;
   approved_at: string | null;
+  /** Account status set by compliance staff: active or suspended (mirrors operators.status). */
+  status: string;
   created_at: string;
 };
 
@@ -45,6 +75,7 @@ export type AdminFlag = {
   id: string;
   type: string;
   user_id: string | null;
+  category: string | null;
   description: string | null;
   status: string | null;
   created_at: string;
@@ -74,6 +105,8 @@ export type AdminOperatorRow = OperatorProfile & {
 
 export type AdminRiderRow = Rider & {
   incidents: SafetyIncident[];
+  /** admin_flags rows of type "suspension" for this rider — same convention as operators. */
+  suspensions: AdminFlag[];
 };
 
 /** Checks admin_users for the signed-in user. Returns null while signed out or not an admin. */
@@ -165,16 +198,20 @@ export function useAdminRiders(enabled: boolean) {
       const [
         { data: riders, error: riderErr },
         { data: incidents, error: incErr },
+        { data: flags, error: flagErr },
       ] = await Promise.all([
         supabase.from("riders").select("*").order("created_at", { ascending: false }),
         supabase.from("safety_incidents").select("*"),
+        supabase.from("admin_flags").select("*").eq("type", "suspension"),
       ]);
       if (riderErr) throw riderErr;
       if (incErr) throw incErr;
+      if (flagErr) throw flagErr;
 
       return (riders ?? []).map((r) => ({
         ...(r as Rider),
         incidents: (incidents ?? []).filter((i) => i.rider_id === r.id) as SafetyIncident[],
+        suspensions: (flags ?? []).filter((f) => f.user_id === r.id) as AdminFlag[],
       }));
     },
   });
@@ -266,6 +303,114 @@ export function useReinstateOperator() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "operators"] }),
+  });
+}
+
+/**
+ * Suspends a rider: records the flag (with category), flips riders.status to
+ * "suspended", and emails the rider the category + reason + reinstatement steps.
+ * For abuse-related categories, also creates a linked safety_incidents row so the
+ * incident is tracked there alongside the suspension flag. Blocked by RLS unless
+ * caller has the "compliance" role.
+ */
+export function useIssueRiderSuspension() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      riderId: string;
+      riderEmail: string | null;
+      riderName: string | null;
+      category: SuspensionCategory;
+      description: string;
+    }) => {
+      const { data: flag, error: flagError } = await supabase
+        .from("admin_flags")
+        .insert({
+          type: "suspension",
+          user_id: payload.riderId,
+          category: payload.category,
+          description: payload.description,
+          status: "open",
+        })
+        .select()
+        .single();
+      if (flagError) throw flagError;
+
+      if (ABUSE_SUSPENSION_CATEGORIES.has(payload.category)) {
+        const { error: incidentError } = await supabase.from("safety_incidents").insert({
+          type: payload.category,
+          severity: "high",
+          rider_id: payload.riderId,
+          description: payload.description,
+          status: "open",
+          related_flag_id: flag.id,
+        });
+        if (incidentError) throw incidentError;
+      }
+
+      const { error: statusError } = await supabase
+        .from("riders")
+        .update({ status: "suspended" })
+        .eq("id", payload.riderId);
+      if (statusError) throw statusError;
+
+      if (!payload.riderEmail) return { emailSent: false };
+
+      try {
+        await sendRiderSuspensionEmail({
+          data: {
+            to: payload.riderEmail,
+            riderName: payload.riderName ?? "there",
+            category: payload.category,
+            reason: payload.description,
+          },
+        });
+        return { emailSent: true };
+      } catch (err) {
+        console.error("Failed to send rider suspension email", err);
+        return { emailSent: false };
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "riders"] }),
+  });
+}
+
+/**
+ * Reinstates a suspended rider: flips riders.status back to "active", resolves
+ * any open suspension flags, and emails a confirmation. Mirrors useReinstateOperator
+ * exactly. Blocked by RLS unless caller has the "compliance" role.
+ */
+export function useReinstateRider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { riderId: string; riderEmail: string | null; riderName: string | null }) => {
+      const { error: statusError } = await supabase
+        .from("riders")
+        .update({ status: "active" })
+        .eq("id", payload.riderId);
+      if (statusError) throw statusError;
+
+      const { error: flagError } = await supabase
+        .from("admin_flags")
+        .update({ status: "resolved" })
+        .eq("user_id", payload.riderId)
+        .eq("type", "suspension")
+        .eq("status", "open");
+      if (flagError) throw flagError;
+
+      if (!payload.riderEmail) return { emailSent: false };
+
+      try {
+        await sendRiderReinstatementEmail({
+          data: { to: payload.riderEmail, riderName: payload.riderName ?? "there" },
+        });
+        return { emailSent: true };
+      } catch (err) {
+        console.error("Failed to send rider reinstatement email", err);
+        return { emailSent: false };
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "riders"] }),
   });
 }
 
