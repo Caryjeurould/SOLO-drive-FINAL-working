@@ -16,6 +16,11 @@ dist-ssr
 .nitro
 *.local
 
+# Env files — secrets live here, never commit them. *.local above already
+# catches .env.local; this makes the intent explicit and covers .env/.env.production too.
+.env*
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
