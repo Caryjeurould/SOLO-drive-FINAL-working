@@ -4,12 +4,14 @@ import { AppShell } from "@/components/AppShell";
 import { OperatorGate } from "@/components/OperatorGate";
 import {
   Power, Clock, CalendarCheck, AlertTriangle, FileLock2, ShieldCheck,
-  TrendingUp, DollarSign, CheckCircle2, FileText, ArrowRight, Loader2,
+  TrendingUp, DollarSign, CheckCircle2, FileText, ArrowRight, Loader2, MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
 import { useDocuments, REQUIRED_DOC_TYPES } from "@/hooks/useDocuments";
+import { useActiveShift, useGoOnline, useGoOffline, useLocationPing } from "@/hooks/useOperatorShift";
+import type { ShiftServiceType } from "@/hooks/useOperatorShift";
 
 export const Route = createFileRoute("/operator")({
   head: () => ({
@@ -30,14 +32,27 @@ function OperatorDashboardGated() {
 }
 
 function OperatorDashboard() {
-  const [online, setOnline] = useState(false);
+  const [serviceType, setServiceType] = useState<ShiftServiceType>("both");
+  const { data: activeShift, isLoading: shiftLoading } = useActiveShift();
+  const goOnline = useGoOnline();
+  const goOffline = useGoOffline();
+  const locationAvailable = useLocationPing(activeShift?.id);
+  const online = !!activeShift;
 
   const { data: operator, isLoading: opLoading } = useOperatorProfile();
   const { data: weeklyTrips = [], isLoading: tripsLoading } = useWeeklyTrips();
   const { data: recentTrips = [], isLoading: recentLoading } = useRecentTrips(5);
   const { data: documents = [], isLoading: docsLoading } = useDocuments();
 
-  const isLoading = opLoading || tripsLoading || docsLoading;
+  const isLoading = opLoading || tripsLoading || docsLoading || shiftLoading;
+
+  const handleToggleOnline = () => {
+    if (online && activeShift) {
+      goOffline.mutate(activeShift.id);
+    } else if (!online) {
+      goOnline.mutate(serviceType);
+    }
+  };
 
   const hoursCap = 50;
   const dailyHours = computeDailyHours(weeklyTrips);
@@ -104,11 +119,40 @@ function OperatorDashboard() {
                     ? "All guardrails clear. You're free to accept rides."
                     : "Resolve the blockers below to enable service."}
                 </p>
+
+                {online ? (
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded-full bg-primary/10 px-2.5 py-1 capitalize text-primary-glow">
+                      {activeShift?.service_type === "both" ? "Rideshare + Delivery" : activeShift?.service_type}
+                    </span>
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      {locationAvailable ? "Location tracking" : "Location unavailable"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {(["rideshare", "delivery", "both"] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setServiceType(t)}
+                        className={cn(
+                          "rounded-lg border px-3 py-1.5 text-xs capitalize transition-colors",
+                          serviceType === t
+                            ? "border-primary/40 bg-primary/10 text-primary-glow"
+                            : "border-border bg-surface text-muted-foreground hover:bg-secondary",
+                        )}
+                      >
+                        {t === "both" ? "Rideshare + Delivery" : t}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <button
-                disabled={!canGoOnline}
-                onClick={() => setOnline((v) => !v)}
+                disabled={!canGoOnline || goOnline.isPending || goOffline.isPending}
+                onClick={handleToggleOnline}
                 className={cn(
                   "group relative flex h-28 w-28 items-center justify-center rounded-full border transition-all",
                   canGoOnline
@@ -118,7 +162,11 @@ function OperatorDashboard() {
                     : "cursor-not-allowed border-border bg-muted text-muted-foreground/60",
                 )}
               >
-                <Power className="h-8 w-8" />
+                {goOnline.isPending || goOffline.isPending ? (
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                ) : (
+                  <Power className="h-8 w-8" />
+                )}
                 <span className="absolute -bottom-7 text-[10px] uppercase tracking-widest">
                   {online ? "Tap to stop" : "Go online"}
                 </span>

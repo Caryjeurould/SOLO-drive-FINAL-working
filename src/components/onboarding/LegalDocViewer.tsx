@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,14 @@ export function LegalDocViewer({
   const [scrolledEnd, setScrolledEnd] = useState(!!signed);
   const [sig, setSig] = useState(signed?.signature ?? "");
   const ref = useRef<HTMLDivElement>(null);
+
+  // Short documents don't overflow the box, so there's nothing to scroll and
+  // onScroll never fires — without this, signing stays permanently blocked.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.scrollHeight - el.clientHeight < 16) setScrolledEnd(true);
+  }, [body]);
 
   const onScroll = () => {
     const el = ref.current;
