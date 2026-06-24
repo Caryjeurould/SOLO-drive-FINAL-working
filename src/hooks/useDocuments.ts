@@ -6,6 +6,10 @@ export type OperatorDocument = {
   id: string;
   operator_id: string;
   document_type: string;
+  /** A Storage object path ("<operator uid>/<doc type>.<ext>"), NOT a ready-to-use
+   *  URL — the "documents" bucket is private, so viewing a file requires generating
+   *  a fresh signed URL (supabase.storage.from("documents").createSignedUrl(...))
+   *  at view time. Column name is legacy; nothing renders this value directly today. */
   file_url: string | null;
   verified: boolean;
   created_at: string;
@@ -88,11 +92,12 @@ export function useUploadDocument() {
         .upload(path, file, { upsert: true });
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+      // The bucket is private — store the path, not a public URL (getPublicUrl()
+      // would return a URL that 403s). Generate a signed URL on demand when viewing.
       const { data, error } = await supabase
         .from("documents")
         .upsert(
-          { operator_id: user!.id, document_type: documentType, file_url: urlData.publicUrl, verified: false },
+          { operator_id: user!.id, document_type: documentType, file_url: path, verified: false },
           { onConflict: "operator_id,document_type" },
         )
         .select()

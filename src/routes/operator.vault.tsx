@@ -35,10 +35,11 @@ function Vault() {
       console.error(upErr);
       return;
     }
-    const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+    // The bucket is private — store the path, not a public URL (getPublicUrl()
+    // would return a URL that 403s). Generate a signed URL on demand when viewing.
     await upsert.mutateAsync({
       document_type: docTypeId,
-      file_url: urlData.publicUrl,
+      file_url: path,
       verified: false,
     });
   };
