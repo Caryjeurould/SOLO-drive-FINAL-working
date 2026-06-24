@@ -36,10 +36,8 @@ export type OnboardingState = {
     entityName?: string;
     ein?: string;
     formationState?: string;
-    formationDocName?: string;
     commCarrier?: string;
     commPolicy?: string;
-    declarationsDocName?: string;
     confirmLiability?: boolean;
     confirmProfLiability?: boolean;
     stage4Complete?: boolean;

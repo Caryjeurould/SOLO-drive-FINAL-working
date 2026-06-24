@@ -292,7 +292,8 @@ function OperatorCard({ operator, admin }: { operator: AdminOperatorRow; admin: 
       {expanded && (
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <SectionCard title="Identification & Vehicle" icon={<FileText className="h-3.5 w-3.5" />}>
-            <DocVerifyRow label="Driver's license" doc={docMap.license} canWrite={canWrite} onVerify={(v) => docMap.license && verifyDoc.mutate({ documentId: docMap.license.id, verified: v })} />
+            <DocVerifyRow label="Driver's license (front)" doc={docMap.license_front} canWrite={canWrite} onVerify={(v) => docMap.license_front && verifyDoc.mutate({ documentId: docMap.license_front.id, verified: v })} />
+            <DocVerifyRow label="Driver's license (back)" doc={docMap.license_back} canWrite={canWrite} onVerify={(v) => docMap.license_back && verifyDoc.mutate({ documentId: docMap.license_back.id, verified: v })} />
             <FieldRow label="Vehicle" value={[operator.vehicle_year, operator.vehicle_make, operator.vehicle_model].filter(Boolean).join(" ") || "—"} />
             <FieldRow label="VIN" value={operator.vin ?? "—"} />
             <PlaceholderRow label="Vehicle registration document" />

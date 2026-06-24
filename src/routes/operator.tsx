@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
-import { useDocuments, REQUIRED_DOC_TYPES } from "@/hooks/useDocuments";
+import { useDocuments, DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
 import { useActiveShift, useGoOnline, useGoOffline, useLocationPing } from "@/hooks/useOperatorShift";
 import type { ShiftServiceType } from "@/hooks/useOperatorShift";
 
@@ -59,10 +59,10 @@ function OperatorDashboard() {
   const hoursLogged = dailyHours.reduce((s, h) => s + h, 0);
   const hoursLeft = hoursCap - hoursLogged;
   const subActive = operator?.subscription_active ?? false;
-  const docsVerified = REQUIRED_DOC_TYPES.filter((dt) =>
-    documents.some((d) => d.document_type === dt.id && d.verified)
+  const docsVerified = DOCUMENT_REQUIREMENTS.filter((req) =>
+    req.docTypeIds.every((typeId) => documents.some((d) => d.document_type === typeId && d.verified))
   ).length;
-  const docsTotal = REQUIRED_DOC_TYPES.length;
+  const docsTotal = DOCUMENT_REQUIREMENTS.length;
   const canGoOnline = subActive && hoursLeft > 0 && docsVerified === docsTotal;
 
   const { total: weekEarnings, avg: avgFare, count: tripCount } = computeWeeklyEarnings(weeklyTrips);

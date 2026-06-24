@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   ShieldCheck, User, Car, FileSignature, FileSearch, Building2, Lock, Check,
   Plus, X, Upload, ArrowRight, ArrowLeft, AlertTriangle, Sparkles, CheckCircle2,
+  Loader2, FileLock2,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { LegalDocViewer } from "@/components/onboarding/LegalDocViewer";
@@ -11,6 +12,7 @@ import {
   type OnboardingState,
 } from "@/lib/onboarding";
 import { useUpsertOperator } from "@/hooks/useOperatorProfile";
+import { useDocuments, useUploadDocument } from "@/hooks/useDocuments";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -46,10 +48,19 @@ function OnboardingWizard() {
             <CheckCircle2 className="h-7 w-7" />
           </div>
           <h1 className="mt-4 font-display text-4xl font-semibold">You're approved.</h1>
-          <p className="mt-3 text-muted-foreground">SmartLogix Authorization complete. Your Operator Console is unlocked.</p>
-          <Link to="/operator" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-6 py-3.5 text-sm text-primary-foreground shadow-glow">
-            Go to dashboard <ArrowRight className="h-4 w-4" />
-          </Link>
+          <p className="mt-3 text-muted-foreground">
+            SmartLogix Authorization complete. Your profile, disclosures, and required documents —
+            driver's license, business formation, and insurance — have all been submitted.
+            Compliance will verify them before you can go online.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link to="/operator" className="inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-6 py-3.5 text-sm text-primary-foreground shadow-glow">
+              Go to dashboard <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link to="/operator/vault" className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-6 py-3.5 text-sm hover:bg-secondary">
+              <FileLock2 className="h-4 w-4" /> View Document Vault
+            </Link>
+          </div>
         </div>
       </AppShell>
     );
@@ -143,11 +154,18 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
   const set = (patch: Partial<OnboardingState["data"]>) => update({ data: patch });
   const upsertOperator = useUpsertOperator();
   const { user } = useAuth();
+  const { data: documents = [] } = useDocuments();
+  const uploadDocument = useUploadDocument();
+
+  const docMap = Object.fromEntries(documents.map((doc) => [doc.document_type, doc]));
+  const licenseFrontUploaded = !!docMap.license_front?.file_url;
+  const licenseBackUploaded = !!docMap.license_back?.file_url;
 
   const valid =
     !!d.fullName?.trim() && !!d.address?.trim() && !!d.phone && /\d{10}/.test((d.phone ?? "").replace(/\D/g, "")) &&
     !!d.vehMake && !!d.vehModel && !!d.vehYear && isValidVIN(d.vin) &&
-    !!d.autoCarrier && !!d.autoPolicy && isValidSSN(d.ssn) && luhn(d.debit) && !!d.photoDataUrl;
+    !!d.autoCarrier && !!d.autoPolicy && isValidSSN(d.ssn) && luhn(d.debit) && !!d.photoDataUrl &&
+    licenseFrontUploaded && licenseBackUploaded;
 
   const onPhoto = (f?: File) => {
     if (!f) return;
@@ -196,6 +214,32 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
         </div>
         {d.photoDataUrl && (
           <img src={d.photoDataUrl} alt="self" className="mt-4 h-24 w-24 rounded-xl border border-border object-cover" />
+        )}
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-border bg-card/60 p-5">
+        <div className="text-sm font-medium">Driver's license</div>
+        <div className="text-xs text-muted-foreground">
+          Clear photos of both sides. Reviewed by Compliance before you can go online.
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <DocUploadButton
+            label="front"
+            accept="image/*"
+            uploaded={licenseFrontUploaded}
+            uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "license_front"}
+            onPick={(file) => file && uploadDocument.mutate({ documentType: "license_front", file })}
+          />
+          <DocUploadButton
+            label="back"
+            accept="image/*"
+            uploaded={licenseBackUploaded}
+            uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "license_back"}
+            onPick={(file) => file && uploadDocument.mutate({ documentType: "license_back", file })}
+          />
+        </div>
+        {uploadDocument.isError && (
+          <p className="mt-2 text-xs text-destructive">Upload failed — please try again.</p>
         )}
       </div>
 
@@ -423,9 +467,15 @@ function Stage3({ state, update, onDone }: { state: OnboardingState; update: (p:
 function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p: Partial<OnboardingState>) => void; onDone: () => void }) {
   const d = state.data;
   const set = (patch: Partial<OnboardingState["data"]>) => update({ data: patch });
+  const { data: documents = [] } = useDocuments();
+  const uploadDocument = useUploadDocument();
 
-  const valid = !!d.entityType && !!d.entityName?.trim() && isValidEIN(d.ein) && !!d.formationState && !!d.formationDocName &&
-    !!d.commCarrier && !!d.commPolicy && !!d.declarationsDocName && !!d.confirmLiability && !!d.confirmProfLiability;
+  const docMap = Object.fromEntries(documents.map((doc) => [doc.document_type, doc]));
+  const formationUploaded = !!docMap.entity?.file_url;
+  const declarationsUploaded = !!docMap.insurance?.file_url;
+
+  const valid = !!d.entityType && !!d.entityName?.trim() && isValidEIN(d.ein) && !!d.formationState && formationUploaded &&
+    !!d.commCarrier && !!d.commPolicy && declarationsUploaded && !!d.confirmLiability && !!d.confirmProfLiability;
 
   return (
     <div>
@@ -456,7 +506,12 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
         </Field>
         <Field label="State of formation"><Input value={d.formationState ?? ""} onChange={(v) => set({ formationState: v })} placeholder="Delaware" /></Field>
         <Field label="Formation document">
-          <FileButton fileName={d.formationDocName} onPick={(name) => set({ formationDocName: name })} />
+          <DocUploadButton
+            label="formation document"
+            uploaded={formationUploaded}
+            uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "entity"}
+            onPick={(file) => file && uploadDocument.mutate({ documentType: "entity", file })}
+          />
         </Field>
       </div>
 
@@ -474,9 +529,18 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
         <Field label="Commercial auto carrier"><Input value={d.commCarrier ?? ""} onChange={(v) => set({ commCarrier: v })} placeholder="Progressive Commercial" /></Field>
         <Field label="Commercial policy #"><Input value={d.commPolicy ?? ""} onChange={(v) => set({ commPolicy: v })} placeholder="C-XXXXXXXX" /></Field>
         <Field label="Declarations page" full>
-          <FileButton fileName={d.declarationsDocName} onPick={(name) => set({ declarationsDocName: name })} />
+          <DocUploadButton
+            label="declarations page"
+            uploaded={declarationsUploaded}
+            uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "insurance"}
+            onPick={(file) => file && uploadDocument.mutate({ documentType: "insurance", file })}
+          />
         </Field>
       </div>
+
+      {uploadDocument.isError && (
+        <p className="mt-2 text-xs text-destructive">Upload failed — please try again.</p>
+      )}
 
       <div className="mt-4 space-y-2">
         <Check2 checked={!!d.confirmLiability} onChange={(v) => set({ confirmLiability: v })}
@@ -554,14 +618,29 @@ function Check2({ checked, onChange, label }: { checked: boolean; onChange: (v: 
     </label>
   );
 }
-function FileButton({ fileName, onPick }: { fileName?: string; onPick: (name: string) => void }) {
+function DocUploadButton({ label, accept, uploaded, uploading, onPick }: {
+  label: string;
+  accept?: string;
+  uploaded: boolean;
+  uploading: boolean;
+  onPick: (file?: File) => void;
+}) {
   return (
-    <label className="inline-flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-border bg-input px-3 py-2.5 text-sm">
-      <span className={cn("truncate", fileName ? "text-foreground" : "text-muted-foreground/60")}>
-        {fileName ?? "Click to upload"}
+    <label className={cn(
+      "flex cursor-pointer items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-sm",
+      uploaded ? "border-success/30 bg-success/5" : "border-border bg-input",
+    )}>
+      <span className={cn("flex items-center gap-2 truncate", uploaded ? "text-success" : "text-muted-foreground/60")}>
+        {uploading ? (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+        ) : uploaded ? (
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+        ) : (
+          <Upload className="h-4 w-4 shrink-0" />
+        )}
+        {uploading ? "Uploading…" : uploaded ? `${label[0].toUpperCase()}${label.slice(1)} uploaded` : `Upload ${label}`}
       </span>
-      <Upload className="h-4 w-4 text-muted-foreground" />
-      <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0].name)} />
+      <input type="file" accept={accept} className="hidden" onChange={(e) => onPick(e.target.files?.[0])} />
     </label>
   );
 }
