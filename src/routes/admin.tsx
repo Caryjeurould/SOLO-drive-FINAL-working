@@ -10,6 +10,11 @@ import {
   useAuditLog,
   useAllSafetyIncidents,
   useSuspensionAlerts,
+} from "@/hooks/useAdmin";
+import { usePanicAlerts } from "@/hooks/usePanic";
+import { useSafetyContactNumbers, useUpdateSafetyContactNumber } from "@/hooks/useSafetyContacts";
+import type { SafetyContactNumber } from "@/hooks/useSafetyContacts";
+import {
   useLogAdminEvent,
   useIssueSuspension,
   useReinstateOperator,
@@ -33,7 +38,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   ShieldCheck, FileText, AlertTriangle, Clock, Car, User, LogOut, Loader2,
-  FileLock2, Gavel, Ban, ShieldOff, ArrowRight, ChevronDown, ScrollText, Users, Check, X, CheckCircle2, BellRing,
+  FileLock2, Gavel, Ban, ShieldOff, ArrowRight, ChevronDown, ScrollText, Users, Check, X, CheckCircle2, BellRing, ShieldAlert, Phone,
 } from "lucide-react";
 
 // Only the idle/inactive state gets a frosted-glass tint — scoped to data-[state=inactive]
@@ -131,6 +136,7 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
   });
   const logEvent = useLogAdminEvent();
   const { alerts, dismiss: dismissAlert, dismissAll: dismissAllAlerts } = useSuspensionAlerts(canReview);
+  const { alerts: panicAlerts, dismiss: dismissPanicAlert, dismissAll: dismissAllPanicAlerts } = usePanicAlerts(canReview);
 
   const handleSignOut = async () => {
     await signOut();
@@ -156,6 +162,50 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
           </button>
         </header>
 
+        {panicAlerts.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-widest text-destructive">⚠ Emergency — Panic button pressed</span>
+              <button onClick={dismissAllPanicAlerts} className="text-xs text-muted-foreground hover:text-foreground">
+                Dismiss all
+              </button>
+            </div>
+            {panicAlerts.map((a) => (
+              <div key={a.id} className="flex items-center justify-between gap-3 rounded-2xl border-2 border-destructive bg-destructive/20 px-4 py-3 text-sm">
+                <div className="flex items-center gap-3">
+                  <ShieldAlert className="h-5 w-5 shrink-0 animate-pulse text-destructive" />
+                  <div>
+                    <div className="font-semibold text-destructive">
+                      {a.triggeredBy === "operator" ? "Operator" : "Rider"} triggered the panic button
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {a.pickupAddress && a.dropoffAddress ? `${a.pickupAddress} → ${a.dropoffAddress}` : "Trip route unavailable"}
+                      {" · "}
+                      {new Date(a.createdAt).toLocaleString()}
+                      {a.lat != null && a.lng != null && (
+                        <>
+                          {" · "}
+                          <a
+                            href={`https://www.google.com/maps?q=${a.lat},${a.lng}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline hover:text-foreground"
+                          >
+                            View last known location
+                          </a>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => dismissPanicAlert(a.id)} className="shrink-0 text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {alerts.length > 0 && (
           <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between">
@@ -178,6 +228,8 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
             ))}
           </div>
         )}
+
+        {canReview && <SafetyContactsCard canWrite={canReview} />}
 
         <Tabs
           defaultValue="operators"
@@ -266,6 +318,79 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
         </Tabs>
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * The Panic Button and other Safety/Compliance contact needs route to these —
+ * outsourced third-party answering services, not an internal staffed line.
+ * Fixed set of 3 rows (seeded in the migration); editing is the only action,
+ * no add/remove, per the "keep it simple" scope of this feature.
+ */
+function SafetyContactsCard({ canWrite }: { canWrite: boolean }) {
+  const { data: contacts = [], isLoading } = useSafetyContactNumbers();
+  const update = useUpdateSafetyContactNumber();
+  const [edits, setEdits] = useState<Record<string, { label: string; phone_number: string }>>({});
+
+  if (isLoading) return null;
+
+  const getValue = (c: SafetyContactNumber) => edits[c.id] ?? { label: c.label, phone_number: c.phone_number ?? "" };
+
+  const handleSave = (c: SafetyContactNumber) => {
+    const value = getValue(c);
+    update.mutate(
+      { id: c.id, label: value.label, phone_number: value.phone_number },
+      { onSuccess: () => setEdits((prev) => { const next = { ...prev }; delete next[c.id]; return next; }) },
+    );
+  };
+
+  return (
+    <div className="mt-4 rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        <Phone className="h-3.5 w-3.5" /> Safety & Compliance Contact Numbers
+      </div>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        Forwards to outsourced third-party answering services — not an internal staffed line.
+      </p>
+      <div className="mt-3 space-y-3">
+        {contacts.map((c) => {
+          const value = getValue(c);
+          const dirty = edits[c.id] !== undefined;
+          return (
+            <div key={c.id} className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[160px] flex-1">
+                <label className="text-[11px] text-muted-foreground">Label</label>
+                <input
+                  value={value.label}
+                  disabled={!canWrite}
+                  onChange={(e) => setEdits((prev) => ({ ...prev, [c.id]: { ...value, label: e.target.value } }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                />
+              </div>
+              <div className="min-w-[160px] flex-1">
+                <label className="text-[11px] text-muted-foreground">Phone number</label>
+                <input
+                  value={value.phone_number}
+                  disabled={!canWrite}
+                  placeholder="Not set"
+                  onChange={(e) => setEdits((prev) => ({ ...prev, [c.id]: { ...value, phone_number: e.target.value } }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                />
+              </div>
+              {canWrite && (
+                <button
+                  onClick={() => handleSave(c)}
+                  disabled={!dirty || update.isPending}
+                  className="rounded-lg bg-success px-3 py-2 text-xs font-medium text-success-foreground disabled:opacity-50"
+                >
+                  {update.isPending ? "Saving…" : "Save"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

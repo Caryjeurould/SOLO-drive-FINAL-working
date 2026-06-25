@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { MapboxMap } from "@/components/MapboxMap";
 import { PostTripReportPrompt } from "@/components/PostTripReportPrompt";
+import { PanicButton } from "@/components/PanicButton";
 import { supabase } from "@/lib/supabase";
-import { Phone, MessageCircle, Shield, Star, Navigation } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { Phone, MessageCircle, Star, Navigation } from "lucide-react";
 
 export const Route = createFileRoute("/customer/trip")({
   head: () => ({
@@ -17,6 +19,7 @@ export const Route = createFileRoute("/customer/trip")({
 });
 
 function TripScreen() {
+  const { user } = useAuth();
   const [eta, setEta] = useState(8);
   const [tripCompleted, setTripCompleted] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState(false);
@@ -86,7 +89,15 @@ function TripScreen() {
             <div className="mt-3 grid grid-cols-3 gap-2">
               <Action icon={<Phone className="h-4 w-4" />} label="Call" />
               <Action icon={<MessageCircle className="h-4 w-4" />} label="Message" />
-              <Action icon={<Shield className="h-4 w-4" />} label="Safety" />
+              {!tripCompleted && tripRequestId && user && (
+                <PanicButton
+                  tripRequestId={tripRequestId}
+                  triggeredById={user.id}
+                  triggeredBy="rider"
+                  pickupAddress={pickupAddress}
+                  dropoffAddress={dropoffAddress}
+                />
+              )}
             </div>
           </div>
 

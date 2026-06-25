@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { OperatorGate } from "@/components/OperatorGate";
 import { PostTripReportPrompt } from "@/components/PostTripReportPrompt";
+import { PanicButton } from "@/components/PanicButton";
 import {
   Power, Clock, CalendarCheck, AlertTriangle, FileLock2, ShieldCheck,
   TrendingUp, DollarSign, CheckCircle2, FileText, ArrowRight, Loader2, MapPin,
@@ -34,6 +35,28 @@ function useOperatorTripNeedingFeedback(operatorId: string | undefined) {
         .maybeSingle();
       if (error) throw error;
       return data as { id: string } | null;
+    },
+  });
+}
+
+/** There's no dedicated live in-trip screen for Operators yet, so this is the
+ *  closest real signal for "currently on an active trip" — the Panic button
+ *  shows only when one actually exists, not just whenever the Operator is online. */
+function useOperatorActiveTrip(operatorId: string | undefined) {
+  return useQuery({
+    queryKey: ["trip-requests", "active", "operator", operatorId],
+    enabled: !!operatorId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("trip_requests")
+        .select("id, pickup_stops, dropoff_stops")
+        .eq("matched_operator_id", operatorId!)
+        .eq("status", "in_progress")
+        .order("matched_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; pickup_stops: { address?: string }[] | null; dropoff_stops: { address?: string }[] | null } | null;
     },
   });
 }
@@ -69,6 +92,7 @@ function OperatorDashboard() {
   const { data: recentTrips = [], isLoading: recentLoading } = useRecentTrips(5);
   const { data: documents = [], isLoading: docsLoading } = useDocuments();
   const { data: tripNeedingFeedback, refetch: refetchFeedbackTrip } = useOperatorTripNeedingFeedback(operator?.id);
+  const { data: activeTrip } = useOperatorActiveTrip(operator?.id);
 
   const isLoading = opLoading || tripsLoading || docsLoading || shiftLoading;
 
@@ -177,6 +201,21 @@ function OperatorDashboard() {
                         {t === "both" ? "Rideshare + Delivery" : t}
                       </button>
                     ))}
+                  </div>
+                )}
+
+                {activeTrip && (
+                  <div className="mt-4 max-w-[220px]">
+                    <PanicButton
+                      tripRequestId={activeTrip.id}
+                      triggeredById={operator?.id ?? ""}
+                      triggeredBy="operator"
+                      pickupAddress={activeTrip.pickup_stops?.[0]?.address ?? null}
+                      dropoffAddress={activeTrip.dropoff_stops?.[0]?.address ?? null}
+                      fallbackLat={activeShift?.last_lat ?? null}
+                      fallbackLng={activeShift?.last_lng ?? null}
+                      className="w-full flex-row justify-center gap-2 py-2.5"
+                    />
                   </div>
                 )}
               </div>
