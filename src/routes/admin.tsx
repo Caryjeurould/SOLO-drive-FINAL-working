@@ -8,25 +8,32 @@ import {
   useAdminRiders,
   useAdminUsers,
   useAuditLog,
+  useAllSafetyIncidents,
+  useSuspensionAlerts,
   useLogAdminEvent,
   useIssueSuspension,
   useReinstateOperator,
+  useTerminateOperator,
   useIssueRiderSuspension,
   useReinstateRider,
-  useAdminVerifyDocument,
+  useTerminateRider,
+  useAdminSetDocumentStatus,
   useUpdateAdminUser,
   hasRole,
   SUSPENSION_CATEGORIES,
   ABUSE_SUSPENSION_CATEGORIES,
 } from "@/hooks/useAdmin";
-import type { AdminOperatorRow, AdminRiderRow, AdminUser, AdminRole, AuditLogEntry, SuspensionCategory } from "@/hooks/useAdmin";
+import type {
+  AdminOperatorRow, AdminRiderRow, AdminUser, AdminRole, AuditLogEntry, SuspensionCategory, SafetyIncident,
+} from "@/hooks/useAdmin";
+import type { DocumentStatus } from "@/hooks/useDocuments";
 import { computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
 import { LEGAL_DOCS } from "@/lib/onboarding";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   ShieldCheck, FileText, AlertTriangle, Clock, Car, User, LogOut, Loader2,
-  FileLock2, Gavel, Ban, ArrowRight, ChevronDown, ScrollText, Users, Check, X, CheckCircle2,
+  FileLock2, Gavel, Ban, ShieldOff, ArrowRight, ChevronDown, ScrollText, Users, Check, X, CheckCircle2, BellRing,
 } from "lucide-react";
 
 // Only the idle/inactive state gets a frosted-glass tint — scoped to data-[state=inactive]
@@ -112,15 +119,18 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const isSuperAdmin = admin.role === "super_admin";
+  const canReview = hasRole(admin, "compliance");
 
   const { data: operators = [], isLoading: opLoading } = useAdminOperators(true);
   const { data: riders = [], isLoading: riderLoading } = useAdminRiders(true);
   const { data: staff = [], isLoading: staffLoading } = useAdminUsers(isSuperAdmin);
+  const { data: incidents = [], isLoading: incidentsLoading } = useAllSafetyIncidents(canReview);
   const [auditActorId, setAuditActorId] = useState<string>("all");
   const { data: auditLog = [], isLoading: auditLoading } = useAuditLog(isSuperAdmin, {
     actorId: auditActorId === "all" ? undefined : auditActorId,
   });
   const logEvent = useLogAdminEvent();
+  const { alerts, dismiss: dismissAlert, dismissAll: dismissAllAlerts } = useSuspensionAlerts(canReview);
 
   const handleSignOut = async () => {
     await signOut();
@@ -146,18 +156,46 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
           </button>
         </header>
 
+        {alerts.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase tracking-widest text-destructive">Live suspension alerts</span>
+              <button onClick={dismissAllAlerts} className="text-xs text-muted-foreground hover:text-foreground">
+                Dismiss all
+              </button>
+            </div>
+            {alerts.map((a) => (
+              <div key={a.id} className="flex items-center justify-between gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <BellRing className="h-4 w-4 shrink-0 animate-pulse text-destructive" />
+                  <span className="font-medium text-destructive">{a.category ?? "Suspension"}</span>
+                  <span className="text-muted-foreground">{a.description ?? "An account was just suspended."}</span>
+                </div>
+                <button onClick={() => dismissAlert(a.id)} className="shrink-0 text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <Tabs
           defaultValue="operators"
           className="mt-8"
           onValueChange={(tab) => logEvent.mutate({ action: "view", description: `Opened ${tab} tab`, metadata: { tab } })}
         >
-          <TabsList className={cn("h-11 w-full", isSuperAdmin ? "max-w-2xl" : "max-w-md")}>
+          <TabsList className={cn("h-11 w-full", isSuperAdmin ? "max-w-3xl" : canReview ? "max-w-xl" : "max-w-md")}>
             <TabsTrigger value="operators" className={TAB_TRIGGER_CLASS}>
               <Car className="h-3.5 w-3.5" /> Operators ({operators.length})
             </TabsTrigger>
             <TabsTrigger value="riders" className={TAB_TRIGGER_CLASS}>
               <User className="h-3.5 w-3.5" /> Riders ({riders.length})
             </TabsTrigger>
+            {canReview && (
+              <TabsTrigger value="incidents" className={TAB_TRIGGER_CLASS}>
+                <AlertTriangle className="h-3.5 w-3.5" /> Incidents ({incidents.length})
+              </TabsTrigger>
+            )}
             {isSuperAdmin && (
               <TabsTrigger value="staff" className={TAB_TRIGGER_CLASS}>
                 <Users className="h-3.5 w-3.5" /> Staff ({staff.length})
@@ -198,6 +236,16 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
             )}
           </TabsContent>
 
+          {canReview && (
+            <TabsContent value="incidents" className="mt-6">
+              {incidentsLoading ? (
+                <LoadingBlock />
+              ) : (
+                <SafetyIncidentsTab incidents={incidents} operators={operators} riders={riders} />
+              )}
+            </TabsContent>
+          )}
+
           {isSuperAdmin && (
             <TabsContent value="staff" className="mt-6">
               {staffLoading ? <LoadingBlock /> : <StaffTab staff={staff} currentAdminId={admin.id} />}
@@ -226,10 +274,13 @@ function OperatorCard({ operator, admin }: { operator: AdminOperatorRow; admin: 
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
   const [reinstateOpen, setReinstateOpen] = useState(false);
+  const [terminateOpen, setTerminateOpen] = useState(false);
+  const [terminateJustification, setTerminateJustification] = useState("");
   const logEvent = useLogAdminEvent();
   const issueSuspension = useIssueSuspension();
   const reinstateOperator = useReinstateOperator();
-  const verifyDoc = useAdminVerifyDocument();
+  const terminateOperator = useTerminateOperator();
+  const setDocStatus = useAdminSetDocumentStatus();
 
   const canWrite = hasRole(admin, "compliance");
   const docMap = Object.fromEntries(operator.documents.map((d) => [d.document_type, d]));
@@ -237,6 +288,15 @@ function OperatorCard({ operator, admin }: { operator: AdminOperatorRow; admin: 
   const hoursThisWeek = dailyHours.reduce((s, h) => s + h, 0);
   const { total: weekEarnings, count: tripCount } = computeWeeklyEarnings(operator.trips);
   const suspended = operator.status === "suspended";
+  const terminated = operator.status === "terminated";
+
+  const handleTerminate = () => {
+    if (!terminateJustification.trim()) return;
+    terminateOperator.mutate(
+      { operatorId: operator.id, justification: terminateJustification.trim() },
+      { onSuccess: () => { setTerminateJustification(""); setTerminateOpen(false); } },
+    );
+  };
 
   const handleToggleExpand = () => {
     const next = !expanded;
@@ -279,7 +339,7 @@ function OperatorCard({ operator, admin }: { operator: AdminOperatorRow; admin: 
           <div className="text-xs text-muted-foreground">{operator.email ?? "—"} · {operator.phone ?? "—"}</div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={cn("rounded-full px-3 py-1 text-xs", suspended ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>
+          <span className={cn("rounded-full px-3 py-1 text-xs", (suspended || terminated) ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>
             {operator.status ?? "active"}
           </span>
           <span className={cn("rounded-full px-3 py-1 text-xs", operator.subscription_active ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>
@@ -292,17 +352,17 @@ function OperatorCard({ operator, admin }: { operator: AdminOperatorRow; admin: 
       {expanded && (
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <SectionCard title="Identification & Vehicle" icon={<FileText className="h-3.5 w-3.5" />}>
-            <DocVerifyRow label="Driver's license (front)" doc={docMap.license_front} canWrite={canWrite} onVerify={(v) => docMap.license_front && verifyDoc.mutate({ documentId: docMap.license_front.id, verified: v })} />
-            <DocVerifyRow label="Driver's license (back)" doc={docMap.license_back} canWrite={canWrite} onVerify={(v) => docMap.license_back && verifyDoc.mutate({ documentId: docMap.license_back.id, verified: v })} />
+            <DocVerifyRow label="Driver's license (front)" doc={docMap.license_front} canWrite={canWrite} onSetStatus={(s) => docMap.license_front && setDocStatus.mutate({ documentId: docMap.license_front.id, status: s })} />
+            <DocVerifyRow label="Driver's license (back)" doc={docMap.license_back} canWrite={canWrite} onSetStatus={(s) => docMap.license_back && setDocStatus.mutate({ documentId: docMap.license_back.id, status: s })} />
             <FieldRow label="Vehicle" value={[operator.vehicle_year, operator.vehicle_make, operator.vehicle_model].filter(Boolean).join(" ") || "—"} />
             <FieldRow label="VIN" value={operator.vin ?? "—"} />
             <PlaceholderRow label="Vehicle registration document" />
           </SectionCard>
 
           <SectionCard title="Insurance & Background Check" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
-            <DocVerifyRow label="Commercial insurance" doc={docMap.insurance} canWrite={canWrite} onVerify={(v) => docMap.insurance && verifyDoc.mutate({ documentId: docMap.insurance.id, verified: v })} />
-            <DocVerifyRow label="Background check" doc={docMap.background} canWrite={canWrite} onVerify={(v) => docMap.background && verifyDoc.mutate({ documentId: docMap.background.id, verified: v })} />
-            <DocVerifyRow label="Criminal disclosure" doc={docMap.criminal} canWrite={canWrite} onVerify={(v) => docMap.criminal && verifyDoc.mutate({ documentId: docMap.criminal.id, verified: v })} />
+            <DocVerifyRow label="Commercial insurance" doc={docMap.insurance} canWrite={canWrite} onSetStatus={(s) => docMap.insurance && setDocStatus.mutate({ documentId: docMap.insurance.id, status: s })} />
+            <DocVerifyRow label="Background check" doc={docMap.background} canWrite={canWrite} onSetStatus={(s) => docMap.background && setDocStatus.mutate({ documentId: docMap.background.id, status: s })} />
+            <DocVerifyRow label="Criminal disclosure" doc={docMap.criminal} canWrite={canWrite} onSetStatus={(s) => docMap.criminal && setDocStatus.mutate({ documentId: docMap.criminal.id, status: s })} />
             <PlaceholderRow label="Background check approval date" />
           </SectionCard>
 
@@ -357,7 +417,7 @@ function OperatorCard({ operator, admin }: { operator: AdminOperatorRow; admin: 
               <p className="text-[11px] text-warning">Operator reinstated, but the confirmation email failed to send.</p>
             )}
 
-            {canWrite && !suspended && (
+            {canWrite && !suspended && !terminated && (
               suspendOpen ? (
                 <div className="mt-2 space-y-2">
                   <textarea
@@ -392,6 +452,44 @@ function OperatorCard({ operator, admin }: { operator: AdminOperatorRow; admin: 
             {issueSuspension.data?.emailSent === false && (
               <p className="text-[11px] text-warning">Operator suspended, but the notification email failed to send.</p>
             )}
+
+            {canWrite && !terminated && (
+              <div className="mt-3 border-t border-dashed border-border pt-3">
+                {terminateOpen ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Permanent. Only after a documented investigation — record your findings below.
+                    </p>
+                    <textarea
+                      value={terminateJustification}
+                      onChange={(e) => setTerminateJustification(e.target.value)}
+                      placeholder="Investigation findings and justification for termination…"
+                      rows={3}
+                      className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleTerminate}
+                        disabled={!terminateJustification.trim() || terminateOperator.isPending}
+                        className="rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground disabled:opacity-50"
+                      >
+                        {terminateOperator.isPending ? "Submitting…" : "Confirm permanent termination"}
+                      </button>
+                      <button onClick={() => setTerminateOpen(false)} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setTerminateOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20"
+                  >
+                    <ShieldOff className="h-3 w-3" /> Terminate permanently
+                  </button>
+                )}
+              </div>
+            )}
           </SectionCard>
 
           <SectionCard title="Weekly Hours & Activity" icon={<Clock className="h-3.5 w-3.5" />}>
@@ -417,14 +515,26 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
   const [suspendCategory, setSuspendCategory] = useState<SuspensionCategory | "">("");
   const [suspendDescription, setSuspendDescription] = useState("");
   const [reinstateOpen, setReinstateOpen] = useState(false);
+  const [terminateOpen, setTerminateOpen] = useState(false);
+  const [terminateJustification, setTerminateJustification] = useState("");
   const logEvent = useLogAdminEvent();
   const issueSuspension = useIssueRiderSuspension();
   const reinstateRider = useReinstateRider();
+  const terminateRider = useTerminateRider();
 
   const canWrite = hasRole(admin, "compliance");
   const fullName = [rider.first_name, rider.last_name].filter(Boolean).join(" ") || "Unnamed rider";
   const cleared = rider.bg_status === "cleared";
   const suspended = rider.status === "suspended";
+  const terminated = rider.status === "terminated";
+
+  const handleTerminate = () => {
+    if (!terminateJustification.trim()) return;
+    terminateRider.mutate(
+      { riderId: rider.id, justification: terminateJustification.trim() },
+      { onSuccess: () => { setTerminateJustification(""); setTerminateOpen(false); } },
+    );
+  };
 
   const handleToggleExpand = () => {
     const next = !expanded;
@@ -468,7 +578,7 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
           <div className="text-xs text-muted-foreground">{rider.email ?? "—"} · {rider.phone ?? "—"} · DOB {rider.dob ?? "—"}</div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={cn("rounded-full px-3 py-1 text-xs", suspended ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>
+          <span className={cn("rounded-full px-3 py-1 text-xs", (suspended || terminated) ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>
             {rider.status ?? "active"}
           </span>
           <span className={cn("rounded-full px-3 py-1 text-xs", cleared ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>
@@ -561,7 +671,7 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
               <p className="text-[11px] text-warning">Rider reinstated, but the confirmation email failed to send.</p>
             )}
 
-            {canWrite && !suspended && (
+            {canWrite && !suspended && !terminated && (
               suspendOpen ? (
                 <div className="mt-2 space-y-2">
                   <select
@@ -611,6 +721,44 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
             {issueSuspension.data?.emailSent === false && (
               <p className="text-[11px] text-warning">Rider suspended, but the notification email failed to send.</p>
             )}
+
+            {canWrite && !terminated && (
+              <div className="mt-3 border-t border-dashed border-border pt-3">
+                {terminateOpen ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Permanent. Only after a documented investigation — record your findings below.
+                    </p>
+                    <textarea
+                      value={terminateJustification}
+                      onChange={(e) => setTerminateJustification(e.target.value)}
+                      placeholder="Investigation findings and justification for termination…"
+                      rows={3}
+                      className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleTerminate}
+                        disabled={!terminateJustification.trim() || terminateRider.isPending}
+                        className="rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground disabled:opacity-50"
+                      >
+                        {terminateRider.isPending ? "Submitting…" : "Confirm permanent termination"}
+                      </button>
+                      <button onClick={() => setTerminateOpen(false)} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setTerminateOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20"
+                  >
+                    <ShieldOff className="h-3 w-3" /> Terminate permanently
+                  </button>
+                )}
+              </div>
+            )}
           </SectionCard>
 
           <SectionCard title="Account" icon={<User className="h-3.5 w-3.5" />}>
@@ -619,6 +767,79 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
           </SectionCard>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Every safety_incidents row, both directions. Egregious categories already
+ * auto-suspended the accused party the instant they were filed — this is the
+ * review surface for those plus every "General complaint" that didn't meet
+ * that threshold but still needs a human look.
+ */
+function SafetyIncidentsTab({
+  incidents,
+  operators,
+  riders,
+}: {
+  incidents: SafetyIncident[];
+  operators: AdminOperatorRow[];
+  riders: AdminRiderRow[];
+}) {
+  if (incidents.length === 0) {
+    return <EmptyState icon={<AlertTriangle className="h-8 w-8" />} text="No incident reports on file." />;
+  }
+
+  const nameById = new Map<string, string>();
+  operators.forEach((o) => nameById.set(o.id, o.name ?? o.email ?? "Unnamed operator"));
+  riders.forEach((r) => nameById.set(r.id, [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email || "Unnamed rider"));
+
+  return (
+    <div className="space-y-3">
+      {incidents.map((i) => {
+        const accusedId = i.reported_party === "operator" ? i.operator_id : i.reported_party === "rider" ? i.rider_id : null;
+        const accusedName = accusedId ? nameById.get(accusedId) ?? `${accusedId.slice(0, 8)}…` : "Unknown";
+        const reporterName = i.reported_by_id ? nameById.get(i.reported_by_id) ?? `${i.reported_by_id.slice(0, 8)}…` : "Compliance-initiated";
+        const egregious = i.severity === "high";
+
+        return (
+          <div
+            key={i.id}
+            className={cn("rounded-2xl border p-4", egregious ? "border-destructive/30 bg-destructive/5" : "border-border bg-card")}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest",
+                    egregious ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground",
+                  )}>
+                    {i.type}
+                  </span>
+                  {i.reported_party && (
+                    <span className="text-xs text-muted-foreground">
+                      against {i.reported_party === "operator" ? "Operator" : "Rider"} {accusedName}
+                    </span>
+                  )}
+                  {egregious && (
+                    <span className="text-[10px] uppercase tracking-widest text-destructive">Account auto-suspended</span>
+                  )}
+                </div>
+                <p className="mt-2 text-sm">{i.description ?? "—"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Reported by {reporterName} · {new Date(i.created_at).toLocaleString()}
+                </p>
+              </div>
+              <span className={cn(
+                "rounded-full px-2 py-1 text-[10px] uppercase tracking-widest",
+                i.status === "open" ? "bg-warning/15 text-warning" : "bg-success/15 text-success",
+              )}>
+                {i.status ?? "open"}
+              </span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -771,28 +992,40 @@ function DocVerifyRow({
   label,
   doc,
   canWrite,
-  onVerify,
+  onSetStatus,
 }: {
   label: string;
-  doc?: { verified: boolean; file_url: string | null };
+  doc?: { status: DocumentStatus };
   canWrite: boolean;
-  onVerify: (verified: boolean) => void;
+  onSetStatus: (status: DocumentStatus) => void;
 }) {
-  const status = doc?.verified ? "Verified" : doc?.file_url ? "Pending review" : "Missing";
+  const status: DocumentStatus | "missing" = doc?.status ?? "missing";
+  const statusLabel = status === "verified" ? "Verified" : status === "rejected" ? "Rejected" : status === "pending" ? "Pending review" : "Missing";
+  const colorClass = status === "verified" ? "text-success" : status === "rejected" ? "text-destructive" : status === "pending" ? "text-warning" : undefined;
 
   return (
     <div className="flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 text-sm">
       <span className="text-muted-foreground">{label}</span>
       <div className="flex items-center gap-2">
-        <span className={cn("font-medium", doc?.verified && "text-success", !doc?.verified && doc?.file_url && "text-warning")}>{status}</span>
-        {canWrite && doc?.file_url && !doc.verified && (
-          <button onClick={() => onVerify(true)} title="Verify" className="rounded-md bg-success/15 p-1 text-success hover:bg-success/25">
-            <Check className="h-3.5 w-3.5" />
+        <span className={cn("font-medium", colorClass)}>{statusLabel}</span>
+        {canWrite && status === "pending" && (
+          <>
+            <button onClick={() => onSetStatus("verified")} title="Verify" className="rounded-md bg-success/15 p-1 text-success hover:bg-success/25">
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={() => onSetStatus("rejected")} title="Reject — suspends the operator immediately if previously approved" className="rounded-md bg-destructive/15 p-1 text-destructive hover:bg-destructive/25">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
+        {canWrite && status === "verified" && (
+          <button onClick={() => onSetStatus("pending")} title="Revoke verification" className="rounded-md bg-warning/15 p-1 text-warning hover:bg-warning/25">
+            <X className="h-3.5 w-3.5" />
           </button>
         )}
-        {canWrite && doc?.verified && (
-          <button onClick={() => onVerify(false)} title="Revoke verification" className="rounded-md bg-warning/15 p-1 text-warning hover:bg-warning/25">
-            <X className="h-3.5 w-3.5" />
+        {canWrite && status === "rejected" && (
+          <button onClick={() => onSetStatus("verified")} title="Verify anyway" className="rounded-md bg-success/15 p-1 text-success hover:bg-success/25">
+            <Check className="h-3.5 w-3.5" />
           </button>
         )}
       </div>

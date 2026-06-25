@@ -1,17 +1,42 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { OperatorGate } from "@/components/OperatorGate";
+import { PostTripReportPrompt } from "@/components/PostTripReportPrompt";
 import {
   Power, Clock, CalendarCheck, AlertTriangle, FileLock2, ShieldCheck,
   TrendingUp, DollarSign, CheckCircle2, FileText, ArrowRight, Loader2, MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
 import { useDocuments, DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
 import { useActiveShift, useGoOnline, useGoOffline, useLocationPing } from "@/hooks/useOperatorShift";
 import type { ShiftServiceType } from "@/hooks/useOperatorShift";
+
+/** The most recent completed trip matched to this operator that they haven't
+ *  given post-trip feedback on yet — drives the "How was your trip?" prompt. */
+function useOperatorTripNeedingFeedback(operatorId: string | undefined) {
+  return useQuery({
+    queryKey: ["trip-requests", "needs-feedback", "operator", operatorId],
+    enabled: !!operatorId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("trip_requests")
+        .select("id")
+        .eq("matched_operator_id", operatorId!)
+        .eq("status", "completed")
+        .is("operator_feedback_at", null)
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string } | null;
+    },
+  });
+}
 
 export const Route = createFileRoute("/operator")({
   head: () => ({
@@ -43,6 +68,7 @@ function OperatorDashboard() {
   const { data: weeklyTrips = [], isLoading: tripsLoading } = useWeeklyTrips();
   const { data: recentTrips = [], isLoading: recentLoading } = useRecentTrips(5);
   const { data: documents = [], isLoading: docsLoading } = useDocuments();
+  const { data: tripNeedingFeedback, refetch: refetchFeedbackTrip } = useOperatorTripNeedingFeedback(operator?.id);
 
   const isLoading = opLoading || tripsLoading || docsLoading || shiftLoading;
 
@@ -63,7 +89,8 @@ function OperatorDashboard() {
     req.docTypeIds.every((typeId) => documents.some((d) => d.document_type === typeId && d.verified))
   ).length;
   const docsTotal = DOCUMENT_REQUIREMENTS.length;
-  const canGoOnline = subActive && hoursLeft > 0 && docsVerified === docsTotal;
+  const accountActive = (operator?.status ?? "active") === "active";
+  const canGoOnline = accountActive && subActive && hoursLeft > 0 && docsVerified === docsTotal;
 
   const { total: weekEarnings, avg: avgFare, count: tripCount } = computeWeeklyEarnings(weeklyTrips);
 
@@ -115,9 +142,13 @@ function OperatorDashboard() {
                   <span className="font-display text-3xl font-semibold">{online ? "Online & accepting" : "Offline"}</span>
                 </div>
                 <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                  {canGoOnline
-                    ? "All guardrails clear. You're free to accept rides."
-                    : "Resolve the blockers below to enable service."}
+                  {!accountActive
+                    ? operator?.status === "terminated"
+                      ? "Your account has been permanently terminated. Contact Compliance for details."
+                      : "Your account is suspended. Contact Compliance to resolve this and resume service."
+                    : canGoOnline
+                      ? "All guardrails clear. You're free to accept rides."
+                      : "Resolve the blockers below to enable service."}
                 </p>
 
                 {online ? (
@@ -174,7 +205,13 @@ function OperatorDashboard() {
             </div>
 
             {/* Guardrails */}
-            <div className="relative mt-8 grid gap-3 sm:grid-cols-3">
+            <div className="relative mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Guardrail
+                ok={accountActive}
+                icon={<ShieldCheck className="h-4 w-4" />}
+                label="Account"
+                value={operator?.status === "terminated" ? "Terminated" : operator?.status === "suspended" ? "Suspended" : "Active"}
+              />
               <Guardrail
                 ok={subActive}
                 icon={<CalendarCheck className="h-4 w-4" />}
@@ -299,6 +336,14 @@ function OperatorDashboard() {
           </div>
         </section>
       </div>
+
+      {tripNeedingFeedback && (
+        <PostTripReportPrompt
+          tripRequestId={tripNeedingFeedback.id}
+          role="operator"
+          onDone={() => refetchFeedbackTrip()}
+        />
+      )}
     </AppShell>
   );
 }

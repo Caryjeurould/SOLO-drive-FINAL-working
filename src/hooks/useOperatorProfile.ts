@@ -15,6 +15,10 @@ export type OperatorProfile = {
   hours_used: number;
   subscription_active: boolean;
   created_at: string;
+  /** Set once, the first time all 5 document requirements are simultaneously
+   *  verified. Null means this operator has never been fully approved — a
+   *  document rejection before this is set never auto-suspends. */
+  approved_at: string | null;
 };
 
 export function useOperatorProfile() {

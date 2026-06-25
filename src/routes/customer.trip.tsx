@@ -2,6 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { MapboxMap } from "@/components/MapboxMap";
+import { PostTripReportPrompt } from "@/components/PostTripReportPrompt";
+import { supabase } from "@/lib/supabase";
 import { Phone, MessageCircle, Shield, Star, Navigation } from "lucide-react";
 
 export const Route = createFileRoute("/customer/trip")({
@@ -16,21 +18,39 @@ export const Route = createFileRoute("/customer/trip")({
 
 function TripScreen() {
   const [eta, setEta] = useState(8);
+  const [tripCompleted, setTripCompleted] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState(false);
+
   useEffect(() => {
     const t = setInterval(() => setEta((e) => Math.max(0, e - 1)), 4000);
     return () => clearInterval(t);
   }, []);
 
-  const [pickupAddress, dropoffAddress] = (() => {
+  const [tripRequestId, pickupAddress, dropoffAddress] = (() => {
     try {
       const stored = sessionStorage.getItem("solo.trip");
       if (stored) {
-        const { pickup, dropoff } = JSON.parse(stored);
-        return [pickup as string, dropoff as string];
+        const { tripRequestId, pickup, dropoff } = JSON.parse(stored);
+        return [tripRequestId as string | undefined, pickup as string, dropoff as string];
       }
     } catch {}
-    return ["1333 Camelback Rd, Phoenix, AZ", "14765 Scottsdale Rd, Scottsdale, AZ"];
+    return [undefined, "1333 Camelback Rd, Phoenix, AZ", "14765 Scottsdale Rd, Scottsdale, AZ"];
   })();
+
+  // The simulated ETA reaching 0 is what stands in for "trip completed" until
+  // real GPS-driven trip tracking exists — but the trip_requests row it flips
+  // here is real, so the post-trip report below is tied to an actual record.
+  useEffect(() => {
+    if (eta !== 0 || tripCompleted || !tripRequestId) return;
+    setTripCompleted(true);
+    supabase
+      .from("trip_requests")
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", tripRequestId)
+      .then(({ error }) => {
+        if (error) console.error("Failed to mark trip completed", error);
+      });
+  }, [eta, tripCompleted, tripRequestId]);
 
   return (
     <AppShell>
@@ -73,8 +93,8 @@ function TripScreen() {
           <div className="mt-5 space-y-3 text-sm">
             <Step done label="Booking confirmed" sub="Smart Rate locked at $24.80" />
             <Step done label="Operator assigned" sub="Marcus accepted the trip" />
-            <Step active label="Driving to pickup" sub={`${eta} min · 0.6 mi away`} />
-            <Step label="Arrive at drop-off" sub="Midtown East" />
+            <Step done={tripCompleted} active={!tripCompleted} label="Driving to pickup" sub={tripCompleted ? "Arrived" : `${eta} min · 0.6 mi away`} />
+            <Step done={tripCompleted} active={tripCompleted} label="Arrive at drop-off" sub={tripCompleted ? "Trip complete" : "Midtown East"} />
           </div>
 
           <Link
@@ -85,6 +105,14 @@ function TripScreen() {
           </Link>
         </div>
       </div>
+
+      {tripCompleted && tripRequestId && !feedbackGiven && (
+        <PostTripReportPrompt
+          tripRequestId={tripRequestId}
+          role="rider"
+          onDone={() => setFeedbackGiven(true)}
+        />
+      )}
     </AppShell>
   );
 }

@@ -45,21 +45,24 @@ async function sendViaResend(payload: { to: string; subject: string; html: strin
   }
 }
 
-function emailShell(title: string, bodyHtml: string): string {
+function emailShell(title: string, bodyHtml: string, signOff = "The SOLO.drive Compliance Team"): string {
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a; line-height: 1.5;">
       <h2 style="margin-bottom: 16px;">${title}</h2>
       ${bodyHtml}
-      <p style="margin-top: 24px; color: #666;">— The SOLO.drive Compliance Team</p>
+      <p style="margin-top: 24px; color: #666;">— ${signOff}</p>
     </div>
   `;
 }
 
 export const sendOperatorSuspensionEmail = createServerFn({ method: "POST" })
-  .inputValidator((data: { to: string; operatorName: string; reason: string }) => data)
+  .inputValidator((data: { to: string; operatorName: string; reason: string; category?: string }) => data)
   .handler(async ({ data }) => {
     const name = escapeHtml(data.operatorName);
     const reason = escapeHtml(data.reason);
+    const categoryLine = data.category
+      ? `<p><strong>Category:</strong> ${escapeHtml(data.category)}</p>`
+      : "";
     await sendViaResend({
       to: data.to,
       subject: "Your SOLO.drive operator account has been suspended",
@@ -67,7 +70,8 @@ export const sendOperatorSuspensionEmail = createServerFn({ method: "POST" })
         "Account suspended",
         `
           <p>Hi ${name},</p>
-          <p>Your SOLO.drive operator account has been suspended by our compliance team for the following reason:</p>
+          <p>Your SOLO.drive operator account has been suspended by our compliance team.</p>
+          ${categoryLine}
           <blockquote style="border-left: 3px solid #999; margin: 16px 0; padding: 4px 16px; color: #333;">${reason}</blockquote>
           <p>You will not be able to accept rides while your account is suspended.</p>
           <p><strong>To request reinstatement:</strong> reply to this email or contact SOLO.drive support with information or documentation addressing the issue above. A compliance team member will review your account and restore access once the issue has been resolved.</p>
@@ -134,6 +138,37 @@ export const sendRiderReinstatementEmail = createServerFn({ method: "POST" })
           <p>Good news — your SOLO.drive rider account has been reviewed by our compliance team and reinstated. You can resume booking rides immediately.</p>
           <p>Thanks for your patience while we resolved this.</p>
         `,
+      ),
+    });
+    return { ok: true as const };
+  });
+
+export const sendComplianceIncidentAlertEmail = createServerFn({ method: "POST" })
+  .inputValidator((data: {
+    to: string;
+    staffName: string;
+    reportedParty: "operator" | "rider";
+    category: string;
+    description: string;
+  }) => data)
+  .handler(async ({ data }) => {
+    const name = escapeHtml(data.staffName);
+    const category = escapeHtml(data.category);
+    const description = escapeHtml(data.description);
+    const partyLabel = data.reportedParty === "operator" ? "an Operator" : "a Rider";
+    await sendViaResend({
+      to: data.to,
+      subject: `New misconduct report — ${data.category}`,
+      html: emailShell(
+        "New misconduct report filed",
+        `
+          <p>Hi ${name},</p>
+          <p>A new report has been filed against ${partyLabel}. Their account has been automatically suspended pending your review.</p>
+          <p><strong>Category:</strong> ${category}</p>
+          <blockquote style="border-left: 3px solid #999; margin: 16px 0; padding: 4px 16px; color: #333;">${description}</blockquote>
+          <p>Please begin your investigation as soon as possible — this person may be losing income or access while suspended.</p>
+        `,
+        "SOLO.drive",
       ),
     });
     return { ok: true as const };

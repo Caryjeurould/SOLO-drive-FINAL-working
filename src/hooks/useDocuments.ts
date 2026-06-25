@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
+export type DocumentStatus = "pending" | "verified" | "rejected";
+
 export type OperatorDocument = {
   id: string;
   operator_id: string;
@@ -11,6 +13,8 @@ export type OperatorDocument = {
    *  a fresh signed URL (supabase.storage.from("documents").createSignedUrl(...))
    *  at view time. Column name is legacy; nothing renders this value directly today. */
   file_url: string | null;
+  status: DocumentStatus;
+  /** Generated column (status === 'verified') — read-only, kept for convenience. */
   verified: boolean;
   created_at: string;
 };
@@ -60,7 +64,7 @@ export function useUpsertDocument() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { document_type: string; file_url?: string; verified?: boolean }) => {
+    mutationFn: async (payload: { document_type: string; file_url?: string; status?: DocumentStatus }) => {
       const { data, error } = await supabase
         .from("documents")
         .upsert(
@@ -97,7 +101,7 @@ export function useUploadDocument() {
       const { data, error } = await supabase
         .from("documents")
         .upsert(
-          { operator_id: user!.id, document_type: documentType, file_url: path, verified: false },
+          { operator_id: user!.id, document_type: documentType, file_url: path, status: "pending" },
           { onConflict: "operator_id,document_type" },
         )
         .select()

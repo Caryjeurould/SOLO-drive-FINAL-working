@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -6,9 +7,10 @@ import {
   sendOperatorReinstatementEmail,
   sendRiderSuspensionEmail,
   sendRiderReinstatementEmail,
+  sendComplianceIncidentAlertEmail,
 } from "@/lib/email";
 import type { OperatorProfile } from "@/hooks/useOperatorProfile";
-import type { OperatorDocument } from "@/hooks/useDocuments";
+import type { OperatorDocument, DocumentStatus } from "@/hooks/useDocuments";
 import type { Trip } from "@/hooks/useTrips";
 
 export type AdminRole = "super_admin" | "compliance" | "viewer";
@@ -34,6 +36,23 @@ export const ABUSE_SUSPENSION_CATEGORIES = new Set<SuspensionCategory>([
   "Racial discrimination",
 ]);
 
+/**
+ * Egregious misconduct categories for the post-trip report flow. Matches the
+ * safety_incidents_type_check constraint exactly — selecting one of these
+ * automatically suspends the accused party via the DB trigger the instant the
+ * report is submitted. "General complaint" is the non-egregious counterpart —
+ * it's reviewable by Admin but never auto-suspends.
+ */
+export const MISCONDUCT_CATEGORIES = [
+  "Physical abuse",
+  "Sexual abuse",
+  "Verbal abuse",
+  "Racial discrimination",
+  "Inappropriate touching",
+] as const;
+
+export type MisconductCategory = (typeof MISCONDUCT_CATEGORIES)[number];
+
 export type AdminUser = {
   id: string;
   email: string;
@@ -54,7 +73,7 @@ export type Rider = {
   consent_signed: boolean | null;
   consent_signed_at: string | null;
   approved_at: string | null;
-  /** Account status set by compliance staff: active or suspended (mirrors operators.status). */
+  /** active | suspended | terminated — terminated is permanent and manual-only. */
   status: string;
   created_at: string;
 };
@@ -66,6 +85,9 @@ export type SafetyIncident = {
   operator_id: string | null;
   rider_id: string | null;
   trip_id: string | null;
+  /** Which of operator_id/rider_id is the accused party (not the reporter). */
+  reported_party: "operator" | "rider" | null;
+  reported_by_id: string | null;
   description: string | null;
   status: string | null;
   created_at: string;
@@ -213,6 +235,27 @@ export function useAdminRiders(enabled: boolean) {
         incidents: (incidents ?? []).filter((i) => i.rider_id === r.id) as SafetyIncident[],
         suspensions: (flags ?? []).filter((f) => f.user_id === r.id) as AdminFlag[],
       }));
+    },
+  });
+}
+
+/**
+ * Every safety_incidents row, both directions (Operator-accused and
+ * Rider-accused) — the actual "regular Admin review" surface for reports that
+ * didn't meet the auto-suspend threshold, plus a record of every one that did.
+ * RLS restricts this to active compliance/super_admin staff via is_admin().
+ */
+export function useAllSafetyIncidents(enabled: boolean) {
+  return useQuery({
+    queryKey: ["admin", "safety-incidents"],
+    enabled,
+    queryFn: async (): Promise<SafetyIncident[]> => {
+      const { data, error } = await supabase
+        .from("safety_incidents")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as SafetyIncident[];
     },
   });
 }
@@ -414,18 +457,73 @@ export function useReinstateRider() {
   });
 }
 
-/** Verify/reject an operator's uploaded document. Blocked by RLS unless caller has the "compliance" role. */
-export function useAdminVerifyDocument() {
+/**
+ * Sets a document's review status. Blocked by RLS unless caller has the
+ * "compliance" role. Setting "rejected" on a previously-approved operator's
+ * document fires the auto-suspend DB trigger immediately — there's no
+ * additional client-side step needed for that to happen.
+ */
+export function useAdminSetDocumentStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { documentId: string; verified: boolean }) => {
+    mutationFn: async (payload: { documentId: string; status: DocumentStatus }) => {
       const { error } = await supabase
         .from("documents")
-        .update({ verified: payload.verified })
+        .update({ status: payload.status })
         .eq("id", payload.documentId);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "operators"] }),
+  });
+}
+
+/**
+ * Permanently terminates an Operator. Manual-only, requires a documented
+ * justification, never reachable from any automatic path. No reinstate exists
+ * from this state — it's intentionally a dead end.
+ */
+export function useTerminateOperator() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { operatorId: string; justification: string }) => {
+      const { error: statusError } = await supabase
+        .from("operators")
+        .update({ status: "terminated" })
+        .eq("id", payload.operatorId);
+      if (statusError) throw statusError;
+
+      const { error: flagError } = await supabase.from("admin_flags").insert({
+        type: "termination",
+        user_id: payload.operatorId,
+        description: payload.justification,
+        status: "closed",
+      });
+      if (flagError) throw flagError;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "operators"] }),
+  });
+}
+
+/** Permanently terminates a Rider. Mirrors useTerminateOperator exactly. */
+export function useTerminateRider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { riderId: string; justification: string }) => {
+      const { error: statusError } = await supabase
+        .from("riders")
+        .update({ status: "terminated" })
+        .eq("id", payload.riderId);
+      if (statusError) throw statusError;
+
+      const { error: flagError } = await supabase.from("admin_flags").insert({
+        type: "termination",
+        user_id: payload.riderId,
+        description: payload.justification,
+        status: "closed",
+      });
+      if (flagError) throw flagError;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "riders"] }),
   });
 }
 
@@ -479,4 +577,57 @@ export function useAuditLog(enabled: boolean, options: { actorId?: string; limit
       return (data ?? []) as AuditLogEntry[];
     },
   });
+}
+
+export type SuspensionAlert = {
+  id: string;
+  userId: string | null;
+  category: string | null;
+  description: string | null;
+  createdAt: string;
+};
+
+/**
+ * Live in-app alert the instant a suspension happens, via Supabase Realtime —
+ * not just email. Operators losing income while suspended need Compliance to
+ * see this immediately, not whenever someone next refreshes the dashboard.
+ * Only meaningful for an open session; email remains the durable record.
+ */
+export function useSuspensionAlerts(enabled: boolean) {
+  const [alerts, setAlerts] = useState<SuspensionAlert[]>([]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const channel = supabase
+      .channel("admin-suspension-alerts")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "admin_flags", filter: "type=eq.suspension" },
+        (payload) => {
+          const row = payload.new as {
+            id: string;
+            user_id: string | null;
+            category: string | null;
+            description: string | null;
+            created_at: string;
+          };
+          setAlerts((prev) => [
+            { id: row.id, userId: row.user_id, category: row.category, description: row.description, createdAt: row.created_at },
+            ...prev,
+          ].slice(0, 20));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [enabled]);
+
+  return {
+    alerts,
+    dismiss: (id: string) => setAlerts((prev) => prev.filter((a) => a.id !== id)),
+    dismissAll: () => setAlerts([]),
+  };
 }

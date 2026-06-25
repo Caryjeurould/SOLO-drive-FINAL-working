@@ -40,7 +40,7 @@ function Vault() {
     await upsert.mutateAsync({
       document_type: docTypeId,
       file_url: path,
-      verified: false,
+      status: "pending",
     });
   };
 
@@ -68,9 +68,7 @@ function Vault() {
           <div className="mt-8 grid gap-3">
             {REQUIRED_DOC_TYPES.map((dt) => {
               const doc = docMap[dt.id];
-              const verified = doc?.verified ?? false;
-              const uploaded = !!doc?.file_url;
-              const status = verified ? "verified" : uploaded ? "pending" : "missing";
+              const status = doc?.status ?? "missing";
 
               return (
                 <DocRow
@@ -101,7 +99,7 @@ function DocRow({
   uploading,
 }: {
   name: string;
-  status: "verified" | "pending" | "missing";
+  status: "verified" | "pending" | "rejected" | "missing";
   onUpload: (file: File) => void;
   uploading: boolean;
 }) {
@@ -109,18 +107,25 @@ function DocRow({
 
   const isVerified = status === "verified";
   const isPending = status === "pending";
+  const isRejected = status === "rejected";
 
   return (
     <div
       className={cn(
         "flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-5 shadow-card",
-        isVerified ? "border-border bg-card" : isPending ? "border-primary/30 bg-primary/5" : "border-warning/40 bg-warning/5",
+        isVerified ? "border-border bg-card" :
+        isPending ? "border-primary/30 bg-primary/5" :
+        isRejected ? "border-destructive/40 bg-destructive/5" :
+        "border-warning/40 bg-warning/5",
       )}
     >
       <div className="flex items-center gap-4">
         <div className={cn(
           "flex h-12 w-12 items-center justify-center rounded-xl",
-          isVerified ? "bg-success/15 text-success" : isPending ? "bg-primary/15 text-primary-glow" : "bg-warning/15 text-warning",
+          isVerified ? "bg-success/15 text-success" :
+          isPending ? "bg-primary/15 text-primary-glow" :
+          isRejected ? "bg-destructive/15 text-destructive" :
+          "bg-warning/15 text-warning",
         )}>
           {isVerified ? (
             <ShieldCheck className="h-5 w-5" />
@@ -135,6 +140,7 @@ function DocRow({
           <div className="text-xs text-muted-foreground">
             {isVerified && "Verified"}
             {isPending && "Uploaded · Pending review"}
+            {isRejected && "Rejected by Compliance · re-upload required"}
             {status === "missing" && "Required to go online"}
           </div>
         </div>
