@@ -19,6 +19,7 @@ export type OnboardingState = {
     ssn?: string;
     debit?: string;
     photoDataUrl?: string;
+    licenseExpiration?: string;
     stage1Complete?: boolean;
     // Stage 2
     felonies?: { offense: string; year: string; jurisdiction: string }[];
@@ -38,6 +39,8 @@ export type OnboardingState = {
     formationState?: string;
     commCarrier?: string;
     commPolicy?: string;
+    commInsuranceExpiration?: string;
+    profInsuranceExpiration?: string;
     confirmLiability?: boolean;
     confirmProfLiability?: boolean;
     stage4Complete?: boolean;

@@ -165,7 +165,7 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
     !!d.fullName?.trim() && !!d.address?.trim() && !!d.phone && /\d{10}/.test((d.phone ?? "").replace(/\D/g, "")) &&
     !!d.vehMake && !!d.vehModel && !!d.vehYear && isValidVIN(d.vin) &&
     !!d.autoCarrier && !!d.autoPolicy && isValidSSN(d.ssn) && luhn(d.debit) && !!d.photoDataUrl &&
-    licenseFrontUploaded && licenseBackUploaded;
+    licenseFrontUploaded && licenseBackUploaded && !!d.licenseExpiration;
 
   const onPhoto = (f?: File) => {
     if (!f) return;
@@ -222,20 +222,25 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
         <div className="text-xs text-muted-foreground">
           Clear photos of both sides. Reviewed by Compliance before you can go online.
         </div>
+        <div className="mt-3 max-w-xs">
+          <Field label="License expiration date" hint="Matches what's printed on the license — enter this before uploading.">
+            <Input type="date" value={d.licenseExpiration ?? ""} onChange={(v) => set({ licenseExpiration: v })} />
+          </Field>
+        </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <DocUploadButton
             label="front"
             accept="image/*"
             uploaded={licenseFrontUploaded}
             uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "license_front"}
-            onPick={(file) => file && uploadDocument.mutate({ documentType: "license_front", file })}
+            onPick={(file) => file && uploadDocument.mutate({ documentType: "license_front", file, expirationDate: d.licenseExpiration })}
           />
           <DocUploadButton
             label="back"
             accept="image/*"
             uploaded={licenseBackUploaded}
             uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "license_back"}
-            onPick={(file) => file && uploadDocument.mutate({ documentType: "license_back", file })}
+            onPick={(file) => file && uploadDocument.mutate({ documentType: "license_back", file, expirationDate: d.licenseExpiration })}
           />
         </div>
         {uploadDocument.isError && (
@@ -473,9 +478,12 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
   const docMap = Object.fromEntries(documents.map((doc) => [doc.document_type, doc]));
   const formationUploaded = !!docMap.entity?.file_url;
   const declarationsUploaded = !!docMap.insurance?.file_url;
+  const profDeclarationsUploaded = !!docMap.professional_insurance?.file_url;
 
   const valid = !!d.entityType && !!d.entityName?.trim() && isValidEIN(d.ein) && !!d.formationState && formationUploaded &&
-    !!d.commCarrier && !!d.commPolicy && declarationsUploaded && !!d.confirmLiability && !!d.confirmProfLiability;
+    !!d.commCarrier && !!d.commPolicy && declarationsUploaded && !!d.commInsuranceExpiration &&
+    profDeclarationsUploaded && !!d.profInsuranceExpiration &&
+    !!d.confirmLiability && !!d.confirmProfLiability;
 
   return (
     <div>
@@ -528,12 +536,29 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <Field label="Commercial auto carrier"><Input value={d.commCarrier ?? ""} onChange={(v) => set({ commCarrier: v })} placeholder="Progressive Commercial" /></Field>
         <Field label="Commercial policy #"><Input value={d.commPolicy ?? ""} onChange={(v) => set({ commPolicy: v })} placeholder="C-XXXXXXXX" /></Field>
+        <Field label="Commercial auto expiration date" hint="Matches what's printed on the declarations page.">
+          <Input type="date" value={d.commInsuranceExpiration ?? ""} onChange={(v) => set({ commInsuranceExpiration: v })} />
+        </Field>
         <Field label="Declarations page" full>
           <DocUploadButton
             label="declarations page"
             uploaded={declarationsUploaded}
             uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "insurance"}
-            onPick={(file) => file && uploadDocument.mutate({ documentType: "insurance", file })}
+            onPick={(file) => file && uploadDocument.mutate({ documentType: "insurance", file, expirationDate: d.commInsuranceExpiration })}
+          />
+        </Field>
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <Field label="Professional liability expiration date" hint="Matches what's printed on the declarations page." full>
+          <Input type="date" value={d.profInsuranceExpiration ?? ""} onChange={(v) => set({ profInsuranceExpiration: v })} />
+        </Field>
+        <Field label="Professional liability declarations page" full>
+          <DocUploadButton
+            label="professional liability declarations page"
+            uploaded={profDeclarationsUploaded}
+            uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "professional_insurance"}
+            onPick={(file) => file && uploadDocument.mutate({ documentType: "professional_insurance", file, expirationDate: d.profInsuranceExpiration })}
           />
         </Field>
       </div>

@@ -485,10 +485,13 @@ function OperatorCard({ operator, admin }: { operator: AdminOperatorRow; admin: 
           </SectionCard>
 
           <SectionCard title="Insurance & Background Check" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
-            <DocVerifyRow label="Commercial insurance" doc={docMap.insurance} canWrite={canWrite} onSetStatus={(s) => docMap.insurance && setDocStatus.mutate({ documentId: docMap.insurance.id, status: s })} />
+            <div className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+              Insurance - Professional &amp; Commercial Auto
+            </div>
+            <DocVerifyRow label="Commercial auto insurance" doc={docMap.insurance} canWrite={canWrite} onSetStatus={(s) => docMap.insurance && setDocStatus.mutate({ documentId: docMap.insurance.id, status: s })} />
+            <DocVerifyRow label="Professional insurance" doc={docMap.professional_insurance} canWrite={canWrite} onSetStatus={(s) => docMap.professional_insurance && setDocStatus.mutate({ documentId: docMap.professional_insurance.id, status: s })} />
             <DocVerifyRow label="Background check" doc={docMap.background} canWrite={canWrite} onSetStatus={(s) => docMap.background && setDocStatus.mutate({ documentId: docMap.background.id, status: s })} />
             <DocVerifyRow label="Criminal disclosure" doc={docMap.criminal} canWrite={canWrite} onSetStatus={(s) => docMap.criminal && setDocStatus.mutate({ documentId: docMap.criminal.id, status: s })} />
-            <PlaceholderRow label="Background check approval date" />
           </SectionCard>
 
           <SectionCard title="Safety Acknowledgments" icon={<Gavel className="h-3.5 w-3.5" />}>
@@ -1120,17 +1123,25 @@ function DocVerifyRow({
   onSetStatus,
 }: {
   label: string;
-  doc?: { status: DocumentStatus };
+  doc?: { status: DocumentStatus; expiration_date?: string | null };
   canWrite: boolean;
   onSetStatus: (status: DocumentStatus) => void;
 }) {
   const status: DocumentStatus | "missing" = doc?.status ?? "missing";
-  const statusLabel = status === "verified" ? "Verified" : status === "rejected" ? "Rejected" : status === "pending" ? "Pending review" : "Missing";
-  const colorClass = status === "verified" ? "text-success" : status === "rejected" ? "text-destructive" : status === "pending" ? "text-warning" : undefined;
+  const statusLabel = status === "verified" ? "Verified" : status === "rejected" ? "Rejected" : status === "expired" ? "Expired" : status === "pending" ? "Pending review" : "Missing";
+  const isBad = status === "rejected" || status === "expired";
+  const colorClass = status === "verified" ? "text-success" : isBad ? "text-destructive" : status === "pending" ? "text-warning" : undefined;
 
   return (
     <div className="flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 text-sm">
-      <span className="text-muted-foreground">{label}</span>
+      <div>
+        <span className="text-muted-foreground">{label}</span>
+        {doc?.expiration_date && (
+          <div className="text-[10px] text-muted-foreground">
+            {status === "expired" ? "Expired" : "Expires"} {doc.expiration_date}
+          </div>
+        )}
+      </div>
       <div className="flex items-center gap-2">
         <span className={cn("font-medium", colorClass)}>{statusLabel}</span>
         {canWrite && status === "pending" && (
@@ -1148,7 +1159,7 @@ function DocVerifyRow({
             <X className="h-3.5 w-3.5" />
           </button>
         )}
-        {canWrite && status === "rejected" && (
+        {canWrite && isBad && (
           <button onClick={() => onSetStatus("verified")} title="Verify anyway" className="rounded-md bg-success/15 p-1 text-success hover:bg-success/25">
             <Check className="h-3.5 w-3.5" />
           </button>

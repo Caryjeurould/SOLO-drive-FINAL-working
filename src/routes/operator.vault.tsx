@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { OperatorGate } from "@/components/OperatorGate";
-import { FileText, ShieldCheck, Upload, AlertTriangle, ArrowLeft, FileLock2, Loader2 } from "lucide-react";
+import { FileText, ShieldCheck, Upload, AlertTriangle, ArrowLeft, FileLock2, Loader2, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDocuments, useUpsertDocument, REQUIRED_DOC_TYPES } from "@/hooks/useDocuments";
+import { useDocuments, useUpsertDocument, REQUIRED_DOC_TYPES, EXPIRING_DOC_TYPES } from "@/hooks/useDocuments";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
@@ -44,6 +44,10 @@ function Vault() {
     });
   };
 
+  const handleSetExpiration = async (docTypeId: string, date: string) => {
+    await upsert.mutateAsync({ document_type: docTypeId, expiration_date: date });
+  };
+
   return (
     <AppShell>
       <div className="mx-auto max-w-5xl px-4 py-10 md:px-8">
@@ -69,13 +73,17 @@ function Vault() {
             {REQUIRED_DOC_TYPES.map((dt) => {
               const doc = docMap[dt.id];
               const status = doc?.status ?? "missing";
+              const needsExpiration = EXPIRING_DOC_TYPES.has(dt.id);
 
               return (
                 <DocRow
                   key={dt.id}
                   name={dt.name}
                   status={status}
+                  expirationDate={doc?.expiration_date ?? null}
+                  showExpiration={needsExpiration && status !== "missing"}
                   onUpload={(file) => handleUpload(dt.id, file)}
+                  onSetExpiration={(date) => handleSetExpiration(dt.id, date)}
                   uploading={upsert.isPending}
                 />
               );
@@ -95,19 +103,33 @@ function Vault() {
 function DocRow({
   name,
   status,
+  expirationDate,
+  showExpiration,
   onUpload,
+  onSetExpiration,
   uploading,
 }: {
   name: string;
-  status: "verified" | "pending" | "rejected" | "missing";
+  status: "verified" | "pending" | "rejected" | "expired" | "missing";
+  expirationDate: string | null;
+  showExpiration: boolean;
   onUpload: (file: File) => void;
+  onSetExpiration: (date: string) => void;
   uploading: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dateInput, setDateInput] = useState(expirationDate ?? "");
 
   const isVerified = status === "verified";
   const isPending = status === "pending";
   const isRejected = status === "rejected";
+  const isExpired = status === "expired";
+  const isBad = isRejected || isExpired;
+
+  const daysUntilExpiration = expirationDate
+    ? Math.ceil((new Date(expirationDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const expiringSoon = daysUntilExpiration != null && daysUntilExpiration >= 0 && daysUntilExpiration <= 60;
 
   return (
     <div
@@ -115,7 +137,7 @@ function DocRow({
         "flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-5 shadow-card",
         isVerified ? "border-border bg-card" :
         isPending ? "border-primary/30 bg-primary/5" :
-        isRejected ? "border-destructive/40 bg-destructive/5" :
+        isBad ? "border-destructive/40 bg-destructive/5" :
         "border-warning/40 bg-warning/5",
       )}
     >
@@ -124,7 +146,7 @@ function DocRow({
           "flex h-12 w-12 items-center justify-center rounded-xl",
           isVerified ? "bg-success/15 text-success" :
           isPending ? "bg-primary/15 text-primary-glow" :
-          isRejected ? "bg-destructive/15 text-destructive" :
+          isBad ? "bg-destructive/15 text-destructive" :
           "bg-warning/15 text-warning",
         )}>
           {isVerified ? (
@@ -138,11 +160,33 @@ function DocRow({
         <div>
           <div className="font-medium">{name}</div>
           <div className="text-xs text-muted-foreground">
-            {isVerified && "Verified"}
+            {isVerified && (expiringSoon ? `Verified · expires ${expirationDate}` : "Verified")}
             {isPending && "Uploaded · Pending review"}
             {isRejected && "Rejected by Compliance · re-upload required"}
+            {isExpired && "Expired · re-upload an updated document"}
             {status === "missing" && "Required to go online"}
           </div>
+          {showExpiration && (
+            <div className="mt-2 flex items-center gap-2">
+              <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                type="date"
+                value={dateInput}
+                onChange={(e) => setDateInput(e.target.value)}
+                className="rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+              />
+              <button
+                disabled={!dateInput || dateInput === expirationDate}
+                onClick={() => onSetExpiration(dateInput)}
+                className="rounded-lg bg-success px-2.5 py-1 text-[11px] font-medium text-success-foreground disabled:opacity-50"
+              >
+                Save date
+              </button>
+              {!expirationDate && (
+                <span className="text-[11px] text-warning">Expiration date required</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

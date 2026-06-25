@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
-export type DocumentStatus = "pending" | "verified" | "rejected";
+export type DocumentStatus = "pending" | "verified" | "rejected" | "expired";
 
 export type OperatorDocument = {
   id: string;
@@ -16,14 +16,22 @@ export type OperatorDocument = {
   status: DocumentStatus;
   /** Generated column (status === 'verified') — read-only, kept for convenience. */
   verified: boolean;
+  /** Entered by the Operator at upload for license/insurance/professional_insurance,
+   *  matching what's printed on the document. System-computed (verified_at + 12mo)
+   *  for background/entity. Always null for criminal — no expiration concept. */
+  expiration_date: string | null;
   created_at: string;
 };
+
+/** Document types the Operator enters a real printed expiration date for at upload. */
+export const EXPIRING_DOC_TYPES = new Set(["license_front", "license_back", "insurance", "professional_insurance"]);
 
 export const REQUIRED_DOC_TYPES: { id: string; name: string }[] = [
   { id: "entity", name: "Entity / LLC Information" },
   { id: "license_front", name: "Driver's License (Front)" },
   { id: "license_back", name: "Driver's License (Back)" },
   { id: "insurance", name: "Commercial Auto Insurance" },
+  { id: "professional_insurance", name: "Professional Insurance" },
   { id: "background", name: "Background Check" },
   { id: "criminal", name: "Criminal Record Disclosure" },
 ];
@@ -32,12 +40,13 @@ export const REQUIRED_DOC_TYPES: { id: string; name: string }[] = [
  * The 5 onboarding document requirements shown as "X/5 verified." License
  * front/back are two physically separate uploads (see REQUIRED_DOC_TYPES) but
  * count as a single requirement here — it isn't satisfied until both sides
- * are verified.
+ * are verified. Insurance is the same pattern: one requirement covering both
+ * the Professional and Commercial Auto policies.
  */
 export const DOCUMENT_REQUIREMENTS: { id: string; name: string; docTypeIds: string[] }[] = [
   { id: "entity", name: "Entity / LLC Information", docTypeIds: ["entity"] },
   { id: "license", name: "Driver's License", docTypeIds: ["license_front", "license_back"] },
-  { id: "insurance", name: "Commercial Auto Insurance", docTypeIds: ["insurance"] },
+  { id: "insurance", name: "Insurance - Professional & Commercial Auto", docTypeIds: ["insurance", "professional_insurance"] },
   { id: "background", name: "Background Check", docTypeIds: ["background"] },
   { id: "criminal", name: "Criminal Record Disclosure", docTypeIds: ["criminal"] },
 ];
@@ -64,7 +73,7 @@ export function useUpsertDocument() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { document_type: string; file_url?: string; status?: DocumentStatus }) => {
+    mutationFn: async (payload: { document_type: string; file_url?: string; status?: DocumentStatus; expiration_date?: string | null }) => {
       const { data, error } = await supabase
         .from("documents")
         .upsert(
@@ -88,7 +97,11 @@ export function useUploadDocument() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ documentType, file }: { documentType: string; file: File }) => {
+    mutationFn: async ({
+      documentType,
+      file,
+      expirationDate,
+    }: { documentType: string; file: File; expirationDate?: string | null }) => {
       const ext = file.name.split(".").pop();
       const path = `${user!.id}/${documentType}.${ext}`;
       const { error: uploadError } = await supabase.storage
@@ -101,7 +114,13 @@ export function useUploadDocument() {
       const { data, error } = await supabase
         .from("documents")
         .upsert(
-          { operator_id: user!.id, document_type: documentType, file_url: path, status: "pending" },
+          {
+            operator_id: user!.id,
+            document_type: documentType,
+            file_url: path,
+            status: "pending",
+            expiration_date: expirationDate ?? null,
+          },
           { onConflict: "operator_id,document_type" },
         )
         .select()

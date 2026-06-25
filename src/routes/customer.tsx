@@ -56,7 +56,7 @@ function useOperatorVerification(operatorId: string | undefined) {
       if (docErr) throw docErr;
       if (ratingErr) throw ratingErr;
       return {
-        docs: (docs ?? []) as { document_type: string; status: "pending" | "verified" | "rejected" }[],
+        docs: (docs ?? []) as { document_type: string; status: "pending" | "verified" | "rejected" | "expired" }[],
         avgRating: rating?.avg_rating ?? null,
         ratingsCount: rating?.ratings_count ?? 0,
       };
@@ -307,13 +307,14 @@ function Row({ k, v }: { k: string; v: string }) {
   return <><span>{k}</span><span className="text-right text-foreground/80">{v}</span></>;
 }
 
-type DocStatus = "verified" | "pending" | "rejected" | "missing";
+type DocStatus = "verified" | "pending" | "rejected" | "expired" | "missing";
 
 function getRequirementStatus(
   docTypeIds: string[],
-  docs: { document_type: string; status: "pending" | "verified" | "rejected" }[],
+  docs: { document_type: string; status: "pending" | "verified" | "rejected" | "expired" }[],
 ): DocStatus {
   const matches = docTypeIds.map((id) => docs.find((d) => d.document_type === id));
+  if (matches.some((d) => d?.status === "expired")) return "expired";
   if (matches.some((d) => d?.status === "rejected")) return "rejected";
   if (matches.every((d) => d?.status === "verified")) return "verified";
   if (matches.some((d) => d)) return "pending";
@@ -326,7 +327,7 @@ function VerifyDialog({
   onClose,
 }: {
   operatorName: string;
-  docs: { document_type: string; status: "pending" | "verified" | "rejected" }[];
+  docs: { document_type: string; status: "pending" | "verified" | "rejected" | "expired" }[];
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -364,6 +365,7 @@ function VerifyDialog({
                     {status === "verified" ? "Verified by Compliance" :
                      status === "pending" ? "Submitted · pending Compliance review" :
                      status === "rejected" ? "Rejected by Compliance" :
+                     status === "expired" ? "Expired · renewal required" :
                      "Not yet submitted"}
                   </div>
                 </div>
