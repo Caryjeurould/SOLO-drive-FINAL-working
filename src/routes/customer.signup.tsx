@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/customer/signup")({
+  // The real signup form must never be reachable on the public website —
+  // no exceptions, regardless of auth or how the visitor arrived. It only
+  // exists inside the installed Customer app. Every hit here bounces to
+  // /download before anything else renders.
+  beforeLoad: () => {
+    throw redirect({ to: "/download" });
+  },
   head: () => ({
     meta: [{ title: "Rider Signup — SOLO.drive" }],
   }),

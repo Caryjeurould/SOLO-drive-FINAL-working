@@ -6,6 +6,13 @@ import { ArrowRight, ShieldCheck, Gauge, Sparkles, Clock, FileLock2, MapPin } fr
 import { useOnboarding } from "@/lib/onboarding";
 
 export const Route = createFileRoute("/")({
+  validateSearch: (search: Record<string, unknown>) => {
+    const openDownloads = search.openDownloads === true || search.openDownloads === "true";
+    // Only include the key when true — an always-present key (even `false`)
+    // makes TanStack Router treat a bare "/" as needing a canonical-URL
+    // redirect to "/?openDownloads=false" on every single homepage hit.
+    return openDownloads ? { openDownloads: true as const } : {};
+  },
   head: () => ({
     meta: [
       { title: "SOLO.drive — The Independent Operator Platform" },
@@ -19,12 +26,14 @@ export const Route = createFileRoute("/")({
 
 function Landing() {
   const [onb] = useOnboarding();
-  const [showPopup, setShowPopup] = useState(false);
+  const { openDownloads = false } = Route.useSearch();
+  const [showPopup, setShowPopup] = useState(openDownloads);
 
   useEffect(() => {
+    if (openDownloads) return;
     const timer = setTimeout(() => setShowPopup(true), 15000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [openDownloads]);
   const operatorTo = onb.status === "approved" ? "/operator" : "/operator/onboarding";
   const operatorLabel = onb.status === "approved" ? "Operator Dashboard" : onb.status === "in_progress" ? "Resume Onboarding" : "Become an Operator";
   return (

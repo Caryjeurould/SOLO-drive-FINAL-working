@@ -59,10 +59,10 @@ function DownloadPage() {
             SOLO.drive is on your home screen. Open it to complete your setup and book your first ride!
           </p>
           <Link
-            to="/customer/signup"
+            to="/customer/login"
             className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-glow"
           >
-            Set up my account <ArrowRight className="h-4 w-4" />
+            Open the app to sign in <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </div>

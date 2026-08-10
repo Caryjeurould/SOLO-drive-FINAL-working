@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ShieldCheck, User, Car, FileSignature, FileSearch, Building2, Lock, Check,
@@ -17,6 +17,13 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/operator/onboarding")({
+  // The real onboarding form must never be reachable on the public website —
+  // no exceptions, regardless of auth or how the visitor arrived. It only
+  // exists inside the installed Operator app. Every hit here bounces to the
+  // homepage with the Downloads popup open, before anything else renders.
+  beforeLoad: () => {
+    throw redirect({ to: "/", search: { openDownloads: true } });
+  },
   head: () => ({
     meta: [
       { title: "Operator Authorization — SOLO.drive" },

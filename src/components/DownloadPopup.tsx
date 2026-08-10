@@ -24,7 +24,7 @@ export function DownloadPopup({ onClose }: DownloadPopupProps) {
 
         <div className="space-y-3">
           <Link
-            to="/operator/onboarding"
+            to="/download"
             className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4 transition-all hover:border-primary/40 hover:bg-primary/5"
           >
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
@@ -38,7 +38,7 @@ export function DownloadPopup({ onClose }: DownloadPopupProps) {
           </Link>
 
           <Link
-            to="/customer/signup"
+            to="/download"
             className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4 transition-all hover:border-success/40 hover:bg-success/5"
           >
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-success shadow-glow">

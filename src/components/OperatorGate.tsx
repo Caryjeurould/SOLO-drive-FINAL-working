@@ -81,7 +81,7 @@ export function OperatorGate({ children }: { children: React.ReactNode }) {
         </div>
 
         <Link
-          to="/operator/onboarding"
+          to="/download"
           className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
         >
           {state.status === "not_started" ? "Begin authorization" : "Resume onboarding"} <ArrowRight className="h-4 w-4" />

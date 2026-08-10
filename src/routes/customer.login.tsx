@@ -84,7 +84,7 @@ function CustomerLoginPage() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             No account yet?{" "}
-            <Link to="/customer/signup" className="text-primary-glow hover:underline">Create one</Link>
+            <Link to="/download" className="text-primary-glow hover:underline">Create one</Link>
           </p>
         </div>
       </div>
