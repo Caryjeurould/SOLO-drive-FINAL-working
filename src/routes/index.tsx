@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "SOLO.drive — The Independent Operator Platform" },
-      { name: "description", content: "Run your own taxi or delivery business. Zero commission. Flat quarterly fee. Smart Rate AI pricing built in." },
+      { name: "description", content: "Run your own taxi or delivery business. Zero commission. Flat monthly fee. Smart Rate AI pricing built in." },
       { property: "og:title", content: "SOLO.drive — Independent Operator PWA" },
       { property: "og:description", content: "A business-in-a-box for solo drivers. No middleman. No per-ride cuts." },
     ],
@@ -45,7 +45,7 @@ function Landing() {
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary-glow">
-                <Sparkles className="h-3 w-3" /> Zero commission · Flat $600 / quarter
+                <Sparkles className="h-3 w-3" /> Zero commission · Flat $499.99 / month
               </span>
               <h1 className="mt-6 font-display text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl">
                 Your fleet of one.<br />
@@ -74,7 +74,7 @@ function Landing() {
               <div className="mt-10 grid grid-cols-3 gap-6 max-w-md">
                 <Stat value="0%" label="Commission" />
                 <Stat value="50h" label="Weekly cap" />
-                <Stat value="$600" label="Per quarter" />
+                <Stat value="$499.99" label="Per month" />
               </div>
             </div>
 
@@ -117,7 +117,7 @@ function Landing() {
           <Pillar
             icon={<Gauge className="h-5 w-5" />}
             title="Operator Guardrails"
-            body="50-hour weekly cap, quarterly subscription gate, and a 'Go Online' switch that simply won't lie to your customers."
+            body="50-hour weekly cap, monthly subscription gate, and a 'Go Online' switch that simply won't lie to your customers."
           />
           <Pillar
             icon={<FileLock2 className="h-5 w-5" />}

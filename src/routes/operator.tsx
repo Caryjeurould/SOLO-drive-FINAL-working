@@ -143,7 +143,7 @@ function OperatorDashboard() {
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Operator Console</div>
             <h1 className="mt-1 font-display text-4xl font-semibold">{greeting}, {displayName}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {subActive ? "Subscription active · Flat quarterly rate" : "Subscription inactive"}
+              {subActive ? "Subscription active · Flat monthly rate" : "Subscription inactive"}
             </p>
           </div>
           <Link
@@ -317,8 +317,8 @@ function OperatorDashboard() {
           <div className="rounded-3xl border border-border bg-gradient-surface p-6 shadow-card">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs uppercase tracking-widest text-muted-foreground">Quarterly access</div>
-                <div className="mt-1 font-display text-2xl">$600 <span className="text-sm text-muted-foreground">/ quarter</span></div>
+                <div className="text-xs uppercase tracking-widest text-muted-foreground">Monthly access</div>
+                <div className="mt-1 font-display text-2xl">$499.99 <span className="text-sm text-muted-foreground">/ month</span></div>
               </div>
               <span className={cn(
                 "rounded-full px-3 py-1 text-xs",
