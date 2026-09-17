@@ -26,10 +26,8 @@ type FeaturedOperator = {
  *  operator exists, as a stand-in for "the matched operator" until that system
  *  is built. Real fields, just not a real match. */
 function useFeaturedOperator() {
-  const { user } = useAuth();
   return useQuery({
     queryKey: ["featured-operator"],
-    enabled: !!user,
     queryFn: async (): Promise<FeaturedOperator | null> => {
       const { data, error } = await supabase
         .from("operator_public_profile")
@@ -44,10 +42,9 @@ function useFeaturedOperator() {
 }
 
 function useOperatorVerification(operatorId: string | undefined) {
-  const { user } = useAuth();
   return useQuery({
     queryKey: ["operator-verification", operatorId],
-    enabled: !!user && !!operatorId,
+    enabled: !!operatorId,
     queryFn: async () => {
       const [{ data: docs, error: docErr }, { data: rating, error: ratingErr }] = await Promise.all([
         supabase.from("operator_document_status").select("document_type, status").eq("operator_id", operatorId!),
