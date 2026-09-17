@@ -77,8 +77,26 @@ function CustomerBooking() {
   const [showPopup, setShowPopup] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowPopup(true), 15000);
-    return () => clearTimeout(timer);
+    let timer: ReturnType<typeof setTimeout>;
+    let shown = false;
+
+    const resetTimer = () => {
+      if (shown) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        shown = true;
+        setShowPopup(true);
+      }, 15000);
+    };
+
+    const activityEvents = ["mousemove", "mousedown", "keydown", "wheel", "scroll", "touchstart"];
+    activityEvents.forEach((e) => window.addEventListener(e, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      clearTimeout(timer);
+      activityEvents.forEach((e) => window.removeEventListener(e, resetTimer));
+    };
   }, []);
   const [pickup, setPickup] = useState("1333 Camelback Rd, Phoenix, AZ");
   const [dropoff, setDropoff] = useState("14765 Scottsdale Rd, Scottsdale, AZ");
