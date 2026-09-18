@@ -2,8 +2,9 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { DownloadPopup } from "@/components/DownloadPopup";
 import { AppShell } from "@/components/AppShell";
-import { ArrowRight, ShieldCheck, Gauge, Sparkles, Clock, FileLock2, MapPin, Building2, Truck, FileSignature } from "lucide-react";
+import { ArrowRight, ShieldCheck, Gauge, Sparkles, Building2, Truck, FileSignature } from "lucide-react";
 import { useOnboarding } from "@/lib/onboarding";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => {
@@ -34,8 +35,24 @@ function Landing() {
     const timer = setTimeout(() => setShowPopup(true), 15000);
     return () => clearTimeout(timer);
   }, [openDownloads]);
+
+  // Defaults to dark on first render (server and client agree, so no hydration
+  // mismatch) then randomizes client-side after mount — "random per page load"
+  // without the server/client disagreeing on the very first paint.
+  const [heroVariant, setHeroVariant] = useState<"light" | "dark">("dark");
+  useEffect(() => {
+    setHeroVariant(Math.random() < 0.5 ? "light" : "dark");
+  }, []);
+
   const operatorTo = onb.status === "approved" ? "/operator" : "/operator/onboarding";
   const operatorLabel = onb.status === "approved" ? "Operator Dashboard" : onb.status === "in_progress" ? "Resume Onboarding" : "Become an Operator";
+
+  const isLight = heroVariant === "light";
+  const now = new Date();
+  const dashboardHeader = `${now.toLocaleDateString("en-US", { weekday: "long" })} · ${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${now.getFullYear()} · Dashboard`;
+  const hoursThisWeek = 42.7;
+  const hoursCap = 50;
+
   return (
     <AppShell>
       {showPopup && <DownloadPopup onClose={() => setShowPopup(false)} />}
@@ -54,7 +71,7 @@ function Landing() {
             </p>
           </div>
 
-          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <Pillar
               icon={<Building2 className="h-5 w-5" />}
               title="Entity Declaration"
@@ -75,11 +92,21 @@ function Landing() {
               title="Individual Contract Acknowledgment"
               body="Every Operator agrees to the platform's terms to operate as an independent business, maintain all required insurance policies when operating their business on SOLO.drive, and treat every ride as its own separate contract."
             />
+            <Pillar
+              icon={<Gauge className="h-5 w-5" />}
+              title="Operator Guardrails"
+              body="50-hour weekly cap, monthly subscription gate, and a 'Go Online' switch that simply won't lie to your customers."
+            />
+            <Pillar
+              icon={<Sparkles className="h-5 w-5" />}
+              title="Smart Rate Engine & 100% Commission"
+              body="Distance, fuel index, peak hours, weekends, special events, one non-negotiable price both sides see up front. Zero commission — Operators keep 100%."
+            />
           </div>
         </div>
       </section>
 
-      <section className="relative overflow-hidden bg-gradient-hero">
+      <section className="relative overflow-hidden border-t border-border/60 bg-gradient-hero">
         <div className="absolute inset-0 grid-bg opacity-30" />
         <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
@@ -118,32 +145,78 @@ function Landing() {
               </div>
             </div>
 
-            <div className="relative">
+            <div className="relative mx-auto w-full max-w-sm">
               <div className="absolute -inset-8 bg-gradient-primary opacity-20 blur-3xl" />
-              <div className="relative rounded-3xl border border-border bg-card/80 p-6 backdrop-blur-2xl shadow-elevated animate-float">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Smart Rate</div>
-                  <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] text-success">Locked</span>
-                </div>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <span className="font-display text-5xl font-semibold tracking-tight">$24.80</span>
-                  <span className="text-xs text-muted-foreground">est. fare</span>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                  <Chip icon={<MapPin className="h-3 w-3" />}>4.2 mi · 14 min</Chip>
-                  <Chip icon={<Clock className="h-3 w-3" />}>Peak ×1.25</Chip>
-                  <Chip icon={<Sparkles className="h-3 w-3" />}>Fuel ×1.08</Chip>
-                  <Chip icon={<ShieldCheck className="h-3 w-3" />}>Verified driver</Chip>
+              {/* Framed like a cropped phone screen — rounded top edge, bezel
+                  border on top/sides only, no bottom bezel or dead space below
+                  the content so it reads as a mid-screen crop, not a full card. */}
+              <div
+                className={cn(
+                  "relative overflow-hidden rounded-t-[2.5rem] border-t-2 border-x-2 pb-3 pt-6 px-6 backdrop-blur-2xl shadow-elevated animate-float",
+                  isLight ? "border-neutral-300 bg-white/95" : "border-border/70 bg-card/80",
+                )}
+              >
+                <div className={cn("text-[11px] uppercase tracking-widest", isLight ? "text-neutral-500" : "text-muted-foreground")}>
+                  {dashboardHeader}
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-border bg-surface p-4">
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-primary font-display text-lg font-semibold text-primary-foreground">
+                    M
+                  </div>
+                  <div className="leading-tight">
+                    <div className={cn("font-medium", isLight ? "text-neutral-900" : "text-foreground")}>Marcus Rogers</div>
+                    <div className={cn("text-xs", isLight ? "text-neutral-500" : "text-muted-foreground")}>
+                      Toyota Camry '20 · Rogers Transport LLC
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className={isLight ? "text-neutral-500" : "text-muted-foreground"}>Commercial ins</span>
+                    <span className={cn("font-semibold", isLight ? "text-green-600" : "text-green-400")}>Valid</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={isLight ? "text-neutral-500" : "text-muted-foreground"}>Indemnity ins</span>
+                    <span className={cn("font-semibold", isLight ? "text-green-600" : "text-green-400")}>Valid</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between text-xs">
+                  <span className={isLight ? "text-neutral-500" : "text-muted-foreground"}>Declared shift</span>
+                  <span className={isLight ? "text-neutral-900" : "text-foreground"}>3:00am – 3:00pm</span>
+                </div>
+
+                <div className="mt-4">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Operator gets</span>
-                    <span className="font-semibold text-success">$24.80 (100%)</span>
+                    <span className={isLight ? "text-neutral-500" : "text-muted-foreground"}>Hours this week</span>
+                    <span className={isLight ? "text-neutral-900" : "text-foreground"}>{hoursThisWeek} / {hoursCap}h cap</span>
                   </div>
-                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
-                    <div className="h-full w-full bg-gradient-primary" />
+                  <div className={cn("mt-1.5 h-1.5 w-full overflow-hidden rounded-full", isLight ? "bg-neutral-200" : "bg-muted")}>
+                    <div
+                      className={cn("h-full", isLight ? "bg-green-600" : "bg-green-400")}
+                      style={{ width: `${(hoursThisWeek / hoursCap) * 100}%` }}
+                    />
                   </div>
+                  <div className={cn("mt-1 text-[10px]", isLight ? "text-neutral-500" : "text-muted-foreground")}>
+                    {(hoursCap - hoursThisWeek).toFixed(1)}h remaining before weekly cap
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <span className={cn("text-sm font-semibold", isLight ? "text-neutral-900" : "text-foreground")}>$1,375.00</span>
+                  <span className={isLight ? "text-xs text-neutral-500" : "text-xs text-muted-foreground"}>this week</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <span className={cn("text-sm font-semibold", isLight ? "text-amber-600/80" : "text-amber-300/80")}>$71,500.00</span>
+                  <span className={isLight ? "text-xs text-neutral-500" : "text-xs text-muted-foreground"}>YTD earnings</span>
+                </div>
+
+                <div className="mt-4 flex justify-center">
+                  <button className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-blue-500">
+                    Go online
+                  </button>
                 </div>
               </div>
             </div>
@@ -151,26 +224,6 @@ function Landing() {
         </div>
       </section>
 
-      {/* Pillars */}
-      <section className="mx-auto max-w-7xl px-4 py-20 md:px-8">
-        <div className="grid gap-6 md:grid-cols-3">
-          <Pillar
-            icon={<Gauge className="h-5 w-5" />}
-            title="Operator Guardrails"
-            body="50-hour weekly cap, monthly subscription gate, and a 'Go Online' switch that simply won't lie to your customers."
-          />
-          <Pillar
-            icon={<FileLock2 className="h-5 w-5" />}
-            title="Document Vault"
-            body="Insurance, license, background checks. Customers can verify with one tap before they get in your car."
-          />
-          <Pillar
-            icon={<Sparkles className="h-5 w-5" />}
-            title="Smart Rate Engine"
-            body="Distance, fuel index, peak hours, weekends, special events. One non-negotiable price both sides see up front."
-          />
-        </div>
-      </section>
     </AppShell>
   );
 }
@@ -180,15 +233,6 @@ function Stat({ value, label }: { value: string; label: string }) {
     <div>
       <div className="font-display text-2xl font-semibold">{value}</div>
       <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
-    </div>
-  );
-}
-
-function Chip({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/60 px-2.5 py-1.5 text-muted-foreground">
-      {icon}
-      <span className="truncate">{children}</span>
     </div>
   );
 }
