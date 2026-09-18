@@ -57,56 +57,7 @@ function Landing() {
     <AppShell>
       {showPopup && <DownloadPopup onClose={() => setShowPopup(false)} />}
 
-      {/* Marketplace model */}
-      <section className="bg-background">
-        <div className="mx-auto max-w-7xl px-4 py-20 md:px-8">
-          <div className="mx-auto max-w-3xl text-center">
-            <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
-              How SOLO.drive is Different
-            </h2>
-            <p className="mt-4 text-base text-muted-foreground md:text-lg">
-              SOLO.drive is a technology marketplace, not a transportation company — it facilitates a series of
-              direct contracts between independent Operators and Customers, each ride and/or delivery a separate
-              agreement.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <Pillar
-              icon={<Building2 className="h-5 w-5" />}
-              title="Entity Declaration"
-              body="Operators must operate as a valid registered business entity, not as an individual gig worker."
-            />
-            <Pillar
-              icon={<ShieldCheck className="h-5 w-5" />}
-              title="Business Liability/Indemnity Insurance"
-              body="$500,000–$1,000,000 coverage requirement."
-            />
-            <Pillar
-              icon={<Truck className="h-5 w-5" />}
-              title="Commercial Vehicle Insurance"
-              body="Required and separate from personal auto coverage."
-            />
-            <Pillar
-              icon={<FileSignature className="h-5 w-5" />}
-              title="Individual Contract Acknowledgment"
-              body="Every Operator agrees to the platform's terms to operate as an independent business, maintain all required insurance policies when operating their business on SOLO.drive, and treat every ride as its own separate contract."
-            />
-            <Pillar
-              icon={<Gauge className="h-5 w-5" />}
-              title="Operator Guardrails"
-              body="50-hour weekly cap, monthly subscription gate, and a 'Go Online' switch that simply won't lie to your customers."
-            />
-            <Pillar
-              icon={<Sparkles className="h-5 w-5" />}
-              title="Smart Rate Engine & 100% Commission"
-              body="Distance, fuel index, peak hours, weekends, special events, one non-negotiable price both sides see up front. Zero commission — Operators keep 100%."
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="relative overflow-hidden border-t border-border/60 bg-gradient-hero">
+      <section className="relative overflow-hidden bg-gradient-hero">
         <div className="absolute inset-0 grid-bg opacity-30" />
         <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
@@ -220,6 +171,55 @@ function Landing() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Marketplace model */}
+      <section className="border-t-2 border-border bg-background">
+        <div className="mx-auto max-w-7xl px-4 py-20 md:px-8">
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
+              How SOLO.drive is Different
+            </h2>
+            <p className="mt-4 text-base text-muted-foreground md:text-lg">
+              SOLO.drive is a technology marketplace, not a transportation company — it facilitates a series of
+              direct contracts between independent Operators and Customers, each ride and/or delivery a separate
+              agreement.
+            </p>
+          </div>
+
+          <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            <Pillar
+              icon={<Building2 className="h-5 w-5" />}
+              title="Entity Declaration"
+              body="Operators must operate as a valid registered business entity, not as an individual gig worker."
+            />
+            <Pillar
+              icon={<ShieldCheck className="h-5 w-5" />}
+              title="Business Liability/Indemnity Insurance"
+              body="$500,000–$1,000,000 coverage requirement."
+            />
+            <Pillar
+              icon={<Truck className="h-5 w-5" />}
+              title="Commercial Vehicle Insurance"
+              body="Required and separate from personal auto coverage."
+            />
+            <Pillar
+              icon={<FileSignature className="h-5 w-5" />}
+              title="Individual Contract Acknowledgment"
+              body="Every Operator agrees to the platform's terms to operate as an independent business, maintain all required insurance policies when operating their business on SOLO.drive, and treat every ride as its own separate contract."
+            />
+            <Pillar
+              icon={<Gauge className="h-5 w-5" />}
+              title="Operator Guardrails"
+              body="50-hour weekly cap, monthly subscription gate, and a 'Go Online' switch that simply won't lie to your customers."
+            />
+            <Pillar
+              icon={<Sparkles className="h-5 w-5" />}
+              title="Smart Rate Engine & 100% Commission"
+              body="Distance, fuel index, peak hours, weekends, special events, one non-negotiable price both sides see up front. Zero commission — Operators keep 100%."
+            />
           </div>
         </div>
       </section>
