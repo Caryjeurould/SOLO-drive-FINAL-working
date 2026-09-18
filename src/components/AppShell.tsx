@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Car, Map, ShieldCheck, FileLock2, Gauge, LogIn, LogOut } from "lucide-react";
+import { Car, Map, ShieldCheck, FileLock2, Gauge, LogIn, LogOut, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useState } from "react";
@@ -28,8 +28,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8">
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="relative h-9 w-9 rounded-xl bg-gradient-primary shadow-glow flex items-center justify-center">
-              <Car className="h-4 w-4 text-primary-foreground" />
+            <div className="relative h-9 w-9 shrink-0">
+              <div className="relative h-9 w-9 rounded-xl bg-gradient-primary shadow-glow flex items-center justify-center">
+                <Car className="h-4 w-4 text-primary-foreground" />
+              </div>
+              {/* Back-arrow chip — all the "clickable" attention lives here now:
+                  a brief scale+brightness flash every few seconds, badge stays static. */}
+              <div
+                aria-hidden="true"
+                className="animate-chip-flash pointer-events-none absolute -bottom-1.5 left-1/2 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-gradient-primary ring-2 ring-background"
+              >
+                <ArrowLeft className="h-2.5 w-2.5 text-primary-foreground" strokeWidth={2.5} />
+              </div>
             </div>
             <div className="leading-tight">
               <div className="font-display text-lg font-semibold tracking-tight">SOLO<span className="text-gradient">.drive</span></div>
