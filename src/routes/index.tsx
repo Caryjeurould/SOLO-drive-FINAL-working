@@ -1,8 +1,11 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { DownloadPopup } from "@/components/DownloadPopup";
 import { AppShell } from "@/components/AppShell";
-import { ArrowRight, ShieldCheck, Gauge, Sparkles, Building2, Truck, FileSignature } from "lucide-react";
+import { SmartRateBooking } from "@/components/SmartRateBooking";
+import {
+  ArrowRight, ShieldCheck, Gauge, Sparkles, Building2, Truck, FileSignature, DollarSign,
+} from "lucide-react";
 import { useOnboarding } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 
@@ -81,12 +84,6 @@ function Landing() {
                 >
                   {operatorLabel} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </button>
-                <Link
-                  to="/customer"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface/60 px-6 py-3.5 text-sm font-medium text-foreground backdrop-blur-xl transition-colors hover:bg-surface"
-                >
-                  Book a ride
-                </Link>
               </div>
 
               <div className="mt-10 grid grid-cols-3 gap-6 max-w-md">
@@ -188,37 +185,98 @@ function Landing() {
               agreement.
             </p>
           </div>
+        </div>
 
-          <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mx-auto mt-12 max-w-[1600px] px-4 pb-20 md:px-8 md:pb-28">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             <Pillar
               icon={<Building2 className="h-5 w-5" />}
               title="Entity Declaration"
-              body="Operators must operate as a valid registered business entity, not as an individual gig worker."
+              body="An Operator must operate as a registered business entity (LLC, C-Corp, S-Corp), and not as an individual gig worker."
             />
             <Pillar
               icon={<ShieldCheck className="h-5 w-5" />}
-              title="Business Liability/Indemnity Insurance"
-              body="$500,000–$1,000,000 coverage requirement."
+              title="(Bus) Indemnity Ins"
+              body="An Operator is required to maintain $500,000–$1,000,000 Indemnity coverage that protects their individual business or entity to operate on SOLO.drive."
             />
             <Pillar
               icon={<Truck className="h-5 w-5" />}
-              title="Commercial Vehicle Insurance"
-              body="Required and separate from personal auto coverage."
+              title="(Comm) Vehicle Ins"
+              body="An Operator must maintain their state's minimum commercial vehicle insurance requirements to operate their business on the SOLO.drive platform."
             />
             <Pillar
               icon={<FileSignature className="h-5 w-5" />}
-              title="Individual Contract Acknowledgment"
-              body="Every Operator agrees to the platform's terms to operate as an independent business, maintain all required insurance policies when operating their business on SOLO.drive, and treat every ride as its own separate contract."
+              title="Contracted Svs Agreement (CSA)"
+              body="SOLO.drive requires each independent Operator to acknowledge and agree to the Contracted Svs Agreement (CSA) and maintain all required insurance policies."
             />
             <Pillar
               icon={<Gauge className="h-5 w-5" />}
-              title="Operator Guardrails"
-              body="50-hour weekly cap, monthly subscription gate, and a 'Go Online' switch that simply won't lie to your customers."
+              title="Operator Rules & Guardrails"
             />
             <Pillar
               icon={<Sparkles className="h-5 w-5" />}
-              title="Smart Rate Engine & 100% Commission"
-              body="Distance, fuel index, peak hours, weekends, special events, one non-negotiable price both sides see up front. Zero commission — Operators keep 100%."
+              title="Smart-Rate Pricing"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Customer hero */}
+      <section className="relative overflow-hidden border-t-2 border-border bg-gradient-hero">
+        <div className="absolute inset-0 grid-bg opacity-30" />
+        <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28">
+          <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary-glow">
+                <Sparkles className="h-3 w-3" /> Zero commission · Flat $499.99 / month
+              </span>
+              <h2 className="mt-6 font-display text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl">
+                Your fleet of one.<br />
+                <span className="text-gradient">Owned, not rented.</span>
+              </h2>
+              <p className="mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
+                SOLO.drive is the plug-and-play platform for independent taxi and delivery operators.
+                No per-ride commissions. Transparent Smart Rate pricing. Verified credentials your customers can actually see.
+              </p>
+            </div>
+
+            <div className="mx-auto w-full max-w-sm">
+              <SmartRateBooking layout="preview" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Why book with SOLO.drive */}
+      <section className="border-t-2 border-border bg-background">
+        <div className="mx-auto max-w-7xl px-4 py-20 md:px-8">
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
+              Why Book with SOLO.drive
+            </h2>
+            <p className="mt-4 text-base text-muted-foreground md:text-lg">
+              Every ride is a direct contract with a verified independent Operator — transparent pricing, no
+              middleman, no surprises.
+            </p>
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-5xl px-4 pb-20 md:px-8 md:pb-28">
+          <div className="grid gap-6 sm:grid-cols-3">
+            <Pillar
+              icon={<DollarSign className="h-5 w-5" />}
+              title="Transparent Pricing"
+              size="lg"
+            />
+            <Pillar
+              icon={<ShieldCheck className="h-5 w-5" />}
+              title="Verified Operators"
+              size="lg"
+            />
+            <Pillar
+              icon={<Sparkles className="h-5 w-5" />}
+              title="No Surge Surprises"
+              size="lg"
             />
           </div>
         </div>
@@ -237,12 +295,27 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-function Pillar({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
+function Pillar({
+  icon,
+  title,
+  body,
+  size = "sm",
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body?: string;
+  size?: "sm" | "lg";
+}) {
   return (
-    <div className="group rounded-2xl border border-border bg-gradient-surface p-6 shadow-card transition-transform hover:-translate-y-1">
+    <div
+      className={cn(
+        "group flex flex-col items-center rounded-2xl border border-border bg-gradient-surface text-center shadow-card transition-transform hover:-translate-y-1",
+        size === "lg" ? "min-h-[320px] p-8" : "min-h-[280px] p-6",
+      )}
+    >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary-glow">{icon}</div>
       <h3 className="mt-4 font-display text-xl font-semibold">{title}</h3>
-      <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+      {body && <p className="mt-2 text-sm text-muted-foreground">{body}</p>}
     </div>
   );
 }

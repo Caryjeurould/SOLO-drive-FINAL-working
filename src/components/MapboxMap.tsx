@@ -10,6 +10,19 @@ type Props = {
   dropoffAddress?: string;
   onRouteData?: (d: RouteData) => void;
   animateDriver?: boolean;
+  /** Changing this value (e.g. to Date.now()) scatters a fresh set of
+   *  simulated nearby-driver dots near pickup, with one distinguished as the
+   *  confirmed operator. Set to null/undefined to clear them. */
+  nearbyDriversSeed?: number | null;
+  /** Once a ride is confirmed, the trip is an exclusive contract with Marcus —
+   *  other simulated nearby drivers are no longer relevant. When true, only
+   *  Marcus's marker is drawn (the generic ones are skipped). */
+  onlyConfirmedDriver?: boolean;
+  /** fitBounds padding in px — the default (64) is tuned for /customer's
+   *  520px map; pass a smaller explicit value for shorter map containers
+   *  (e.g. the homepage preview card) so the same route doesn't get forced
+   *  into a much more zoomed-out fit just because the container is shorter. */
+  fitPadding?: number;
 };
 
 const ENV_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string) || "";
@@ -88,11 +101,20 @@ export function MapboxMap({
   dropoffAddress,
   onRouteData,
   animateDriver = false,
+  nearbyDriversSeed = null,
+  onlyConfirmedDriver = false,
+  fitPadding = 64,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const routeCoordsRef = useRef<[number, number][]>([]);
+  const nearbyMarkersRef = useRef<any[]>([]);
+  // Which seed value nearby-driver markers were last drawn for — lets the
+  // effect below wait for pickupCoords without redrawing every time pickup
+  // merely changes (that must stay cleared, not auto-redrawn, per address-
+  // change behavior).
+  const drawnForSeedRef = useRef<number | null>(null);
   const onRouteDataRef = useRef(onRouteData);
   onRouteDataRef.current = onRouteData;
 
@@ -104,6 +126,7 @@ export function MapboxMap({
   });
   const [tokenInput, setTokenInput] = useState("");
   const [geocoding, setGeocoding] = useState(false);
+  const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
 
   // ── 1. Initialize map ────────────────────────────────────────────────────
   useEffect(() => {
@@ -172,6 +195,7 @@ export function MapboxMap({
           mbGeocode(dropoffAddress, token),
         ]);
         if (cancelled || !pickup || !dropoff) return;
+        setPickupCoords(pickup);
 
         const route = await mbDirections(pickup, dropoff, token);
         if (cancelled) return;
@@ -217,9 +241,9 @@ export function MapboxMap({
             });
           }
 
-          // Fit viewport to both endpoints
+          // Fit viewport to both endpoints.
           const bounds = new mapboxgl.LngLatBounds(pickup, pickup).extend(dropoff);
-          map.fitBounds(bounds, { padding: 64, maxZoom: 15 });
+          map.fitBounds(bounds, { padding: fitPadding, maxZoom: 15 });
         };
 
         const map = mapRef.current;
@@ -285,6 +309,92 @@ export function MapboxMap({
       driverMarker?.remove();
     };
   }, [animateDriver, token]);
+
+  // ── 4. Simulated nearby drivers, with the confirmed operator distinguished ──
+  // Waits for pickupCoords (set asynchronously by effect 2) rather than firing
+  // once and giving up — nearbyDriversSeed can be set before geocoding has
+  // resolved (e.g. on first mount), and this must draw once it's ready, not
+  // silently do nothing forever. The drawnForSeedRef guard stops pickupCoords
+  // alone (e.g. after an address change) from triggering an unwanted redraw —
+  // that must stay cleared until a genuinely new seed (a fresh confirm) arrives.
+  useEffect(() => {
+    if (nearbyDriversSeed == null || !token) {
+      nearbyMarkersRef.current.forEach((m) => m.remove());
+      nearbyMarkersRef.current = [];
+      drawnForSeedRef.current = null;
+      return;
+    }
+    if (drawnForSeedRef.current === nearbyDriversSeed) return;
+
+    const mapboxgl = (window as any).mapboxgl;
+    const pickup = pickupCoords;
+    const map = mapRef.current;
+    if (!mapboxgl || !pickup || !map) return;
+
+    nearbyMarkersRef.current.forEach((m) => m.remove());
+    nearbyMarkersRef.current = [];
+    drawnForSeedRef.current = nearbyDriversSeed;
+
+    ensureDriverCSS();
+    // Radial offset (random angle + a minimum radius) guarantees visible
+    // separation from the pickup marker — independent x/y jitter could land
+    // arbitrarily close to zero and overlap it.
+    const offsetPoint = (minDeg: number, maxDeg: number): [number, number] => {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = minDeg + Math.random() * (maxDeg - minDeg);
+      return [pickup[0] + Math.cos(angle) * dist, pickup[1] + Math.sin(angle) * dist];
+    };
+
+    const carSvg = (stroke: string, size: number) => `
+      <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 17h-2a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h1l2 -4a2 2 0 0 1 1.8 -1h6.4a2 2 0 0 1 1.8 1l2 4h1a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-2"></path>
+        <circle cx="7" cy="17" r="2"></circle>
+        <circle cx="17" cy="17" r="2"></circle>
+        <path d="M9 17h6"></path>
+      </svg>
+    `;
+
+    if (!onlyConfirmedDriver) {
+      for (let i = 0; i < 3; i++) {
+        const el = document.createElement("div");
+        el.style.cssText = "width:22px;height:22px;border-radius:9999px;background:#475569;display:flex;align-items:center;justify-content:center;box-shadow:0 0 8px rgba(71,85,105,0.7);border:1.5px solid rgba(255,255,255,0.35);";
+        el.innerHTML = carSvg("#e2e8f0", 13);
+        nearbyMarkersRef.current.push(
+          new mapboxgl.Marker({ element: el })
+            .setLngLat(offsetPoint(0.006, 0.015))
+            .addTo(map),
+        );
+      }
+    }
+
+    const confirmedEl = document.createElement("div");
+    confirmedEl.style.cssText = "position:relative;width:32px;height:32px;display:flex;align-items:center;justify-content:center";
+    confirmedEl.innerHTML = `
+      <div class="mb-ping" style="position:absolute;inset:0;border-radius:9999px;background:rgba(124,92,255,0.45)"></div>
+      <div style="position:relative;width:26px;height:26px;border-radius:9999px;background:#7c5cff;border:2px solid white;box-shadow:0 0 14px rgba(124,92,255,0.9);display:flex;align-items:center;justify-content:center;">
+        ${carSvg("#ffffff", 15)}
+      </div>
+    `;
+    nearbyMarkersRef.current.push(
+      new mapboxgl.Marker({ element: confirmedEl })
+        .setLngLat(offsetPoint(0.004, 0.009))
+        .addTo(map),
+    );
+
+    return () => {
+      nearbyMarkersRef.current.forEach((m) => m.remove());
+      nearbyMarkersRef.current = [];
+    };
+  }, [nearbyDriversSeed, token, pickupCoords, onlyConfirmedDriver]);
+
+  // ── 5. Clear nearby-driver markers the moment the address changes ────────
+  // They're pinned to the pickup location at confirm time — if the visitor
+  // edits pickup/dropoff afterward, those markers now describe a stale
+  // location and must disappear immediately, not linger until reconfirmed.
+  useEffect(() => {
+    nearbyMarkersRef.current.forEach((m) => m.remove());
+    nearbyMarkersRef.current = [];
+  }, [pickupAddress, dropoffAddress]);
 
   // ── No-token placeholder ─────────────────────────────────────────────────
   if (!token) {
