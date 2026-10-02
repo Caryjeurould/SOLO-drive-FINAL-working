@@ -187,35 +187,49 @@ function Landing() {
           </div>
         </div>
 
-        <div className="mx-auto mt-12 max-w-[1600px] px-4 pb-20 md:px-8 md:pb-28">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mx-auto mt-12 max-w-6xl px-4 pb-20 md:px-8 md:pb-28">
+          <div className="grid gap-6 sm:grid-cols-3">
             <Pillar
+              align="left"
+              size="lg"
               icon={<Building2 className="h-5 w-5" />}
               title="Entity Declaration"
               body="An Operator must operate as a registered business entity (LLC, C-Corp, S-Corp), and not as an individual gig worker."
             />
             <Pillar
+              align="left"
+              size="lg"
               icon={<ShieldCheck className="h-5 w-5" />}
               title="(Bus) Indemnity Ins"
               body="An Operator is required to maintain $500,000–$1,000,000 Indemnity coverage that protects their individual business or entity to operate on SOLO.drive."
             />
             <Pillar
+              align="left"
+              size="lg"
               icon={<Truck className="h-5 w-5" />}
               title="(Comm) Vehicle Ins"
               body="An Operator must maintain their state's minimum commercial vehicle insurance requirements to operate their business on the SOLO.drive platform."
             />
             <Pillar
+              align="left"
+              size="lg"
               icon={<FileSignature className="h-5 w-5" />}
               title="Contracted Svs Agreement (CSA)"
-              body="SOLO.drive requires each independent Operator to acknowledge and agree to the Contracted Svs Agreement (CSA) and maintain all required insurance policies."
+              body="SOLO.drive requires each Operator to acknowledge and agree to the Contracted Svs Agreement (CSA), which states that every transaction is its own separate contract."
             />
             <Pillar
+              align="left"
+              size="lg"
               icon={<Gauge className="h-5 w-5" />}
               title="Operator Rules & Guardrails"
+              body="SOLO.drive requires Operators to follow built-in operational & safety rules — a monthly subscription gate, a 50-hour weekly cap, and a 'Go Online' switch that logs their active hours."
             />
             <Pillar
+              align="left"
+              size="lg"
               icon={<Sparkles className="h-5 w-5" />}
               title="Smart-Rate Pricing"
+              body="SOLO.drive's proprietary Smart-Rate Pricing — Distance, fuel index, peak hours, weekends, and special events offer a competitive, non-negotiable price both sides see up front — Operators keep 100%."
             />
           </div>
         </div>
@@ -300,11 +314,13 @@ function Pillar({
   title,
   body,
   size = "sm",
+  align = "center",
 }: {
   icon: React.ReactNode;
   title: string;
   body?: string;
   size?: "sm" | "lg";
+  align?: "center" | "left";
 }) {
   return (
     <div
@@ -314,8 +330,12 @@ function Pillar({
       )}
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary-glow">{icon}</div>
-      <h3 className="mt-4 font-display text-xl font-semibold">{title}</h3>
-      {body && <p className="mt-2 text-sm text-muted-foreground">{body}</p>}
+      <h3 className={cn("mt-4 font-display text-xl font-semibold", align === "left" && "self-stretch text-left")}>
+        {title}
+      </h3>
+      {body && (
+        <p className={cn("mt-2 text-sm text-muted-foreground", align === "left" && "self-stretch text-left")}>{body}</p>
+      )}
     </div>
   );
 }
