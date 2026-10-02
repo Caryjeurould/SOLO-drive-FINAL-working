@@ -39,6 +39,23 @@ function Landing() {
     return () => clearTimeout(timer);
   }, [openDownloads]);
 
+  // The page scrolls on <html>, so snapping has to be enabled there — and only
+  // while the homepage is mounted, so other routes keep normal scrolling.
+  // scroll-padding-top offsets snap points by the sticky nav's height so each
+  // section snaps just below the nav instead of underneath it.
+  useEffect(() => {
+    const root = document.documentElement;
+    const header = document.querySelector("header");
+    const prevType = root.style.scrollSnapType;
+    const prevPadding = root.style.scrollPaddingTop;
+    root.style.scrollSnapType = "y mandatory";
+    root.style.scrollPaddingTop = `${header?.offsetHeight ?? 0}px`;
+    return () => {
+      root.style.scrollSnapType = prevType;
+      root.style.scrollPaddingTop = prevPadding;
+    };
+  }, []);
+
   // Defaults to dark on first render (server and client agree, so no hydration
   // mismatch) then randomizes client-side after mount — "random per page load"
   // without the server/client disagreeing on the very first paint.
@@ -60,7 +77,7 @@ function Landing() {
     <AppShell>
       {showPopup && <DownloadPopup onClose={() => setShowPopup(false)} />}
 
-      <section className="relative overflow-hidden bg-gradient-hero">
+      <section className="snap-start relative overflow-hidden bg-gradient-hero">
         <div className="absolute inset-0 grid-bg opacity-30" />
         <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
@@ -173,8 +190,8 @@ function Landing() {
       </section>
 
       {/* Marketplace model */}
-      <section className="border-t-2 border-border bg-background">
-        <div className="mx-auto max-w-7xl px-4 py-20 md:px-8">
+      <section className="snap-start border-t-2 border-border bg-background">
+        <div className="mx-auto max-w-7xl px-4 pt-12 md:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
               How SOLO.drive is Different
@@ -187,11 +204,12 @@ function Landing() {
           </div>
         </div>
 
-        <div className="mx-auto mt-12 max-w-6xl px-4 pb-20 md:px-8 md:pb-28">
-          <div className="grid gap-6 sm:grid-cols-3">
+        <div className="mx-auto mt-8 max-w-6xl px-4 pb-20 md:px-8 md:pb-28">
+          <div className="grid auto-rows-fr gap-x-6 gap-y-4 sm:grid-cols-3">
             <Pillar
               align="left"
               size="lg"
+              className="min-h-0 pb-6"
               icon={<Building2 className="h-5 w-5" />}
               title="Entity Declaration"
               body="An Operator must operate as a registered business entity (LLC, C-Corp, S-Corp), and not as an individual gig worker."
@@ -199,6 +217,7 @@ function Landing() {
             <Pillar
               align="left"
               size="lg"
+              className="min-h-0 pb-6"
               icon={<ShieldCheck className="h-5 w-5" />}
               title="(Bus) Indemnity Ins"
               body="An Operator is required to maintain $500,000–$1,000,000 Indemnity coverage that protects their individual business or entity to operate on SOLO.drive."
@@ -206,6 +225,7 @@ function Landing() {
             <Pillar
               align="left"
               size="lg"
+              className="min-h-0 pb-6"
               icon={<Truck className="h-5 w-5" />}
               title="(Comm) Vehicle Ins"
               body="An Operator must maintain their state's minimum commercial vehicle insurance requirements to operate their business on the SOLO.drive platform."
@@ -213,6 +233,7 @@ function Landing() {
             <Pillar
               align="left"
               size="lg"
+              className="min-h-0 pb-6"
               icon={<FileSignature className="h-5 w-5" />}
               title="Contracted Svs Agreement (CSA)"
               body="SOLO.drive requires each Operator to acknowledge and agree to the Contracted Svs Agreement (CSA), which states that every transaction is its own separate contract."
@@ -220,6 +241,7 @@ function Landing() {
             <Pillar
               align="left"
               size="lg"
+              className="min-h-0 pb-6"
               icon={<Gauge className="h-5 w-5" />}
               title="Operator Rules & Guardrails"
               body="SOLO.drive requires Operators to follow built-in operational & safety rules — a monthly subscription gate, a 50-hour weekly cap, and a 'Go Online' switch that logs their active hours."
@@ -227,6 +249,7 @@ function Landing() {
             <Pillar
               align="left"
               size="lg"
+              className="min-h-0 pb-6"
               icon={<Sparkles className="h-5 w-5" />}
               title="Smart-Rate Pricing"
               body="SOLO.drive's proprietary Smart-Rate Pricing — Distance, fuel index, peak hours, weekends, and special events offer a competitive, non-negotiable price both sides see up front — Operators keep 100%."
@@ -236,7 +259,7 @@ function Landing() {
       </section>
 
       {/* Customer hero */}
-      <section className="relative overflow-hidden border-t-2 border-border bg-gradient-hero">
+      <section className="snap-start relative overflow-hidden border-t-2 border-border bg-gradient-hero">
         <div className="absolute inset-0 grid-bg opacity-30" />
         <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
@@ -262,7 +285,7 @@ function Landing() {
       </section>
 
       {/* Why book with SOLO.drive */}
-      <section className="border-t-2 border-border bg-background">
+      <section className="snap-start border-t-2 border-border bg-background">
         <div className="mx-auto max-w-7xl px-4 py-20 md:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
@@ -315,18 +338,21 @@ function Pillar({
   body,
   size = "sm",
   align = "center",
+  className,
 }: {
   icon: React.ReactNode;
   title: string;
   body?: string;
   size?: "sm" | "lg";
   align?: "center" | "left";
+  className?: string;
 }) {
   return (
     <div
       className={cn(
         "group flex flex-col items-center rounded-2xl border border-border bg-gradient-surface text-center shadow-card transition-transform hover:-translate-y-1",
         size === "lg" ? "min-h-[320px] p-8" : "min-h-[280px] p-6",
+        className,
       )}
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary-glow">{icon}</div>
