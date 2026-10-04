@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { MapboxMap, type RouteData } from "@/components/MapboxMap";
@@ -124,6 +124,16 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
     gasPricePerGal: 3.78,
     specialEvent: event,
   }), [event, routeData]);
+
+  // On every Confirm ride, bring the newly revealed CSA block into view — it's
+  // usually below the fold (under the map on desktop, under the panel + map on
+  // mobile), so without this confirming looks like it did nothing.
+  const csaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!confirmation) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    csaRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+  }, [confirmation?.at]);
 
   if (layout === "preview") {
     return (
@@ -272,7 +282,7 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
         />
       </div>
 
-      <div className="mt-8 rounded-2xl border border-primary/30 bg-primary/5 p-3">
+      <div ref={csaRef} className="mt-8 scroll-mb-6 scroll-mt-24 rounded-2xl border border-primary/30 bg-primary/5 p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-glow">
             <FileSignature className="h-3 w-3" /> Contracted Services
