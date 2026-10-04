@@ -130,7 +130,7 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
       <>
         <div className="rounded-3xl border border-border bg-gradient-surface p-4 shadow-elevated">
           <MapboxMap
-            className="h-[160px] w-full"
+            className="h-[260px] w-full" // matches the /customer split map's phone-width height
             pickupAddress={pickup}
             dropoffAddress={dropoff}
             onRouteData={handleRouteData}
