@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { MapboxMap, type RouteData } from "@/components/MapboxMap";
+import { MapboxMap, useRouteSummary, type RouteData } from "@/components/MapboxMap";
 import { calculateSmartRate } from "@/lib/smart-rate";
 import { supabase } from "@/lib/supabase";
 import { DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
@@ -94,7 +94,15 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
   const [pickup, setPickup] = useState("1333 Camelback Rd, Phoenix, AZ");
   const [dropoff, setDropoff] = useState("14765 Scottsdale Rd, Scottsdale, AZ");
   const [event, setEvent] = useState(false);
+  // Guided booking flow (split/stacked only; the preview card skips it):
+  //   "verify" — panel frozen, only the pulsing Verify button is live
+  //   "edit"   — unlocked after Verify closes; panel only, "Book Ride"
+  //   "review" — map/pills/CSA area shown; button becomes "Confirm-A-Ride"
+  // With no operator card (or no operator available) there's nothing to
+  // verify, so it starts — or falls through to — "edit".
+  const [step, setStep] = useState<"verify" | "edit" | "review">(showOperatorCard ? "verify" : "edit");
   const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyMode, setVerifyMode] = useState<"verify" | "view">("view");
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [confirmation, setConfirmation] = useState<{ at: number; poNumber: string; operatorEtaMin: number } | null>(null);
   // Nearby-driver cars are ambient map decoration, visible from arrival — kept
@@ -103,7 +111,21 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
   const [nearbyDriversSeed, setNearbyDriversSeed] = useState<number | null>(() => Date.now());
 
   const { data: featuredOperator, isLoading: operatorLoading } = useFeaturedOperator(showOperatorCard);
-  const { data: verification } = useOperatorVerification(showOperatorCard ? featuredOperator?.id : undefined);
+  const { data: verification, isFetched: verificationFetched } =
+    useOperatorVerification(showOperatorCard ? featuredOperator?.id : undefined);
+
+  useEffect(() => {
+    if (step === "verify" && !operatorLoading && !featuredOperator) setStep("edit");
+  }, [step, operatorLoading, featuredOperator]);
+
+  const openVerify = () => {
+    setVerifyMode(step === "verify" ? "verify" : "view");
+    setVerifyOpen(true);
+  };
+  const closeVerify = useCallback(() => {
+    setVerifyOpen(false);
+    setStep((s) => (s === "verify" ? "edit" : s));
+  }, []);
 
   const operatorName = featuredOperator?.name?.trim() || "Unverified operator";
   const vehicleLine = [featuredOperator?.vehicle_year, featuredOperator?.vehicle_make, featuredOperator?.vehicle_model]
@@ -134,6 +156,20 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     csaRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
   }, [confirmation?.at]);
+
+  // The route (and so the Smart Rate distance) normally comes from the map.
+  // Until "Book Ride" shows the map, fetch it map-less so pricing is live
+  // from page load instead of jumping when the map appears.
+  useRouteSummary(pickup, dropoff, handleRouteData, layout !== "preview" && step !== "review");
+
+  // "Book Ride" reveals the map — on mobile it lands below the panel, out of
+  // view, so bring it on screen (no-op on desktop where it's already visible).
+  const mapAreaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (step !== "review") return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    mapAreaRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+  }, [step]);
 
   if (layout === "preview") {
     return (
@@ -223,6 +259,8 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
           <VerifyDialog
             operatorName={operatorName}
             docs={verification?.docs ?? []}
+            mode="view"
+            loaded={verificationFetched}
             onClose={() => setVerifyOpen(false)}
           />
         )}
@@ -246,18 +284,22 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
     + `transportation/delivery from the marked pick-up, drop-off, and/or delivery location(s) specified in the `
     + `"Where To" for the agreed upon $${rate.total.toFixed(2)} Smart Rate price.`;
 
+  const locked = step === "verify";
+
   const mapBlock = (
     <div>
-      <MapboxMap
-        // Split layout: half height on phones so the pills, CSA block, and Confirm
-        // button stay close together; full 520px from sm (640px) up.
-        className={layout === "stacked" ? "h-[240px] w-full" : "h-[260px] w-full sm:h-[520px]"}
-        pickupAddress={pickup}
-        dropoffAddress={dropoff}
-        onRouteData={handleRouteData}
-        nearbyDriversSeed={nearbyDriversSeed}
-        onlyConfirmedDriver={confirmation != null}
-      />
+      <div ref={mapAreaRef} className="scroll-mb-6 scroll-mt-24">
+        <MapboxMap
+          // Split layout: half height on phones so the pills, CSA block, and Confirm
+          // button stay close together; full 520px from sm (640px) up.
+          className={layout === "stacked" ? "h-[240px] w-full" : "h-[260px] w-full sm:h-[520px]"}
+          pickupAddress={pickup}
+          dropoffAddress={dropoff}
+          onRouteData={handleRouteData}
+          nearbyDriversSeed={nearbyDriversSeed}
+          onlyConfirmedDriver={confirmation != null}
+        />
+      </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <Pill
@@ -313,13 +355,22 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
       <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Where to?</div>
 
       <div className="mt-4 space-y-2">
-        <Field icon={<span className="h-2.5 w-2.5 rounded-full bg-primary-glow" />} value={pickup} onChange={setPickup} label="Pickup" />
-        <Field icon={<span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />} value={dropoff} onChange={setDropoff} label="Drop-off" />
+        <Field icon={<span className="h-2.5 w-2.5 rounded-full bg-primary-glow" />} value={pickup} onChange={setPickup} label="Pickup" disabled={locked} />
+        <Field icon={<span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />} value={dropoff} onChange={setDropoff} label="Drop-off" disabled={locked} />
       </div>
 
-      <label className="mt-4 flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2.5 text-sm">
+      <label className={cn(
+        "mt-4 flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2.5 text-sm",
+        locked && "cursor-not-allowed",
+      )}>
         <span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-warning" /> Special event nearby</span>
-        <input type="checkbox" checked={event} onChange={(e) => setEvent(e.target.checked)} className="h-4 w-4 accent-primary" />
+        <input
+          type="checkbox"
+          checked={event}
+          onChange={(e) => setEvent(e.target.checked)}
+          disabled={locked}
+          className="h-4 w-4 accent-primary disabled:cursor-not-allowed"
+        />
       </label>
 
       {showOperatorCard && (
@@ -346,8 +397,12 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
                 </div>
               </div>
               <button
-                onClick={() => setVerifyOpen(true)}
-                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs hover:bg-secondary"
+                onClick={openVerify}
+                className={cn(
+                  "rounded-lg border border-border bg-surface px-3 py-1.5 text-xs hover:bg-secondary",
+                  // Step 1: the one live action on the page — pulse to draw the eye.
+                  locked && "animate-pulse border-primary text-foreground ring-2 ring-primary/60",
+                )}
               >
                 Verify
               </button>
@@ -381,10 +436,11 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
       </div>
 
       <button
-        onClick={handleConfirm}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.01]"
+        onClick={step === "review" ? handleConfirm : () => setStep("review")}
+        disabled={locked}
+        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
       >
-        Confirm ride · ${rate.total.toFixed(2)} <ArrowRight className="h-4 w-4" />
+        {step === "review" ? "Confirm-A-Ride" : "Book Ride"} · ${rate.total.toFixed(2)} <ArrowRight className="h-4 w-4" />
       </button>
       <p className="mt-2 text-center text-[11px] text-muted-foreground">
         By confirming you accept the locked Smart Rate. No surge surprises.
@@ -404,14 +460,21 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
   return (
     <>
       {layout === "split" ? (
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:px-8 lg:grid-cols-[1fr_420px]">
-          <div className="order-2 lg:order-1">{mapBlock}</div>
-          <div className="order-1 lg:order-2">{panelBlock}</div>
-        </div>
+        step === "review" ? (
+          <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:px-8 lg:grid-cols-[1fr_420px]">
+            <div className="order-2 lg:order-1">{mapBlock}</div>
+            <div className="order-1 lg:order-2">{panelBlock}</div>
+          </div>
+        ) : (
+          // Steps 1–2: the panel alone, centered, until "Book Ride".
+          <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
+            <div className="mx-auto w-full max-w-[420px]">{panelBlock}</div>
+          </div>
+        )
       ) : (
         <div className="space-y-4">
           {panelBlock}
-          {mapBlock}
+          {step === "review" && mapBlock}
         </div>
       )}
 
@@ -419,20 +482,27 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
         <VerifyDialog
           operatorName={operatorName}
           docs={verification?.docs ?? []}
-          onClose={() => setVerifyOpen(false)}
+          mode={verifyMode}
+          loaded={verificationFetched}
+          onClose={closeVerify}
         />
       )}
     </>
   );
 }
 
-function Field({ icon, value, onChange, label }: { icon: React.ReactNode; value: string; onChange: (v: string) => void; label: string }) {
+function Field({ icon, value, onChange, label, disabled = false }: { icon: React.ReactNode; value: string; onChange: (v: string) => void; label: string; disabled?: boolean }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
+    <div className={cn("flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5", disabled && "cursor-not-allowed")}>
       <div className="flex h-6 w-6 items-center justify-center">{icon}</div>
       <div className="flex-1">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-        <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-transparent text-sm outline-none" />
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="w-full bg-transparent text-sm outline-none disabled:cursor-not-allowed"
+        />
       </div>
       <MapPin className="h-4 w-4 text-muted-foreground" />
     </div>
@@ -493,13 +563,25 @@ function getRequirementStatus(
   return "missing";
 }
 
+const VERIFYING_MIN_MS = 1500;
+const VERIFIED_AUTO_CLOSE_MS = 1200;
+
+/** `mode="verify"` (the booking flow's unlock step): a "Verifying…" state for
+ *  at least VERIFYING_MIN_MS and until statuses have loaded, then the real
+ *  result — auto-closing only when every requirement is verified. Otherwise the
+ *  visitor reads the statuses and closes it themselves.
+ *  `mode="view"`: straight to the statuses, no auto-close. */
 function VerifyDialog({
   operatorName,
   docs,
+  mode,
+  loaded,
   onClose,
 }: {
   operatorName: string;
   docs: { document_type: string; status: "pending" | "verified" | "rejected" | "expired" }[];
+  mode: "verify" | "view";
+  loaded: boolean;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -507,6 +589,22 @@ function VerifyDialog({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  const [minElapsed, setMinElapsed] = useState(mode !== "verify");
+  useEffect(() => {
+    if (mode !== "verify") return;
+    const t = setTimeout(() => setMinElapsed(true), VERIFYING_MIN_MS);
+    return () => clearTimeout(t);
+  }, [mode]);
+
+  const verifying = mode === "verify" && !(minElapsed && loaded);
+  const allVerified = DOCUMENT_REQUIREMENTS.every((req) => getRequirementStatus(req.docTypeIds, docs) === "verified");
+
+  useEffect(() => {
+    if (mode !== "verify" || verifying || !allVerified) return;
+    const t = setTimeout(onClose, VERIFIED_AUTO_CLOSE_MS);
+    return () => clearTimeout(t);
+  }, [mode, verifying, allVerified, onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
@@ -518,7 +616,22 @@ function VerifyDialog({
         <h2 className="mt-1 font-display text-2xl font-semibold">{operatorName}</h2>
         <p className="mt-1 text-xs text-muted-foreground">Read-only credentials. Driver is notified of your view.</p>
 
-        <div className="mt-5 space-y-2">
+        {verifying ? (
+          <div className="mt-5 flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-surface">
+            <Loader2 className="h-6 w-6 animate-spin text-primary-glow" />
+            <div className="text-sm text-muted-foreground">Verifying…</div>
+          </div>
+        ) : (
+        <>
+        <div className={cn(
+          "mt-5 flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium",
+          allVerified ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning",
+        )}>
+          {allVerified ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+          {allVerified ? "Verified ✓" : "Verification incomplete — see document statuses below"}
+        </div>
+
+        <div className="mt-3 space-y-2">
           {DOCUMENT_REQUIREMENTS.map((req) => {
             const status = getRequirementStatus(req.docTypeIds, docs);
             return (
@@ -551,6 +664,8 @@ function VerifyDialog({
             );
           })}
         </div>
+        </>
+        )}
       </div>
     </div>
   );
