@@ -60,42 +60,6 @@ async function mbDirections(a: [number, number], b: [number, number], token: str
   }
 }
 
-function getMapboxToken(): string {
-  if (ENV_TOKEN && ENV_TOKEN !== "your_pk_token_here") return ENV_TOKEN;
-  return typeof window !== "undefined" ? localStorage.getItem("MAPBOX_TOKEN") || "" : "";
-}
-
-/** Route summary (distance/duration) without rendering a map — for callers
- *  that need live pricing while the map itself isn't on screen. Same geocode →
- *  directions lookup and 600ms debounce as MapboxMap's own route fetch. */
-export function useRouteSummary(
-  pickupAddress: string,
-  dropoffAddress: string,
-  onRouteData: (d: RouteData) => void,
-  enabled = true,
-) {
-  useEffect(() => {
-    const token = getMapboxToken();
-    if (!enabled || !token || !pickupAddress.trim() || !dropoffAddress.trim()) return;
-    let cancelled = false;
-
-    const t = setTimeout(async () => {
-      const [pickup, dropoff] = await Promise.all([
-        mbGeocode(pickupAddress, token),
-        mbGeocode(dropoffAddress, token),
-      ]);
-      if (cancelled || !pickup || !dropoff) return;
-      const route = await mbDirections(pickup, dropoff, token);
-      if (!cancelled && route) onRouteData({ distanceMi: route.distanceMi, durationMin: route.durationMin });
-    }, 600);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [enabled, pickupAddress, dropoffAddress, onRouteData]);
-}
-
 async function loadMapboxGL(token: string): Promise<any> {
   const w = window as any;
   if (!document.getElementById("mapbox-css")) {
@@ -154,7 +118,12 @@ export function MapboxMap({
   const onRouteDataRef = useRef(onRouteData);
   onRouteDataRef.current = onRouteData;
 
-  const [token, setToken] = useState<string>(getMapboxToken);
+  const [token, setToken] = useState<string>(() => {
+    if (ENV_TOKEN && ENV_TOKEN !== "your_pk_token_here") return ENV_TOKEN;
+    return typeof window !== "undefined"
+      ? localStorage.getItem("MAPBOX_TOKEN") || ""
+      : "";
+  });
   const [tokenInput, setTokenInput] = useState("");
   const [geocoding, setGeocoding] = useState(false);
   const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
