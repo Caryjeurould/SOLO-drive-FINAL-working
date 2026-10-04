@@ -239,7 +239,9 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
   const mapBlock = (
     <div>
       <MapboxMap
-        className={layout === "stacked" ? "h-[240px] w-full" : "h-[520px] w-full"}
+        // Split layout: half height on phones so the pills, CSA block, and Confirm
+        // button stay close together; full 520px from sm (640px) up.
+        className={layout === "stacked" ? "h-[240px] w-full" : "h-[260px] w-full sm:h-[520px]"}
         pickupAddress={pickup}
         dropoffAddress={dropoff}
         onRouteData={handleRouteData}
