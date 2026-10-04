@@ -145,6 +145,10 @@ export function MapboxMap({
           center: DEFAULT_CENTER,
           zoom: 12,
           attributionControl: false,
+          // Static route view: no drag/pan, pinch- or scroll-zoom, rotate, or
+          // keyboard. Also means swipes over the map scroll the page on mobile
+          // instead of panning the map. Programmatic fitBounds still works.
+          interactive: false,
         });
         mapRef.current = map;
 

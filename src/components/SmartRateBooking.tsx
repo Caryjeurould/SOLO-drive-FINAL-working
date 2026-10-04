@@ -8,7 +8,7 @@ import { DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
 import {
   MapPin, Navigation, Clock, ShieldCheck, Sparkles, ArrowRight,
-  FileText, Star, X, Loader2, CheckCircle2, AlertTriangle, FileSignature, Download,
+  FileText, Star, X, Loader2, CheckCircle2, AlertTriangle, FileSignature, Download, Flag,
 } from "lucide-react";
 
 type FeaturedOperator = {
@@ -73,6 +73,10 @@ function generatePoNumber(initials: string) {
   return `${initials}-${randomDigits(4)}${randomLetters(2)}-${randomDigits(4)}`;
 }
 
+/** "11:55 AM" */
+function formatTime(ms: number) {
+  return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
 type SmartRateBookingProps = {
   /** "split": /customer's full responsive two-column layout (map | panel).
    *  "stacked": a single column, always — for embedding in a narrower slot.
@@ -254,7 +258,16 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
           label="Trip ETA"
           value={routeData ? `${Math.round(routeData.durationMin)} min` : "—"}
         />
-        <Pill icon={<ShieldCheck className="h-3.5 w-3.5" />} label="Operator" value="Verified" />
+        {/* Arrival = CSA timestamp + Operator ETA to pickup + Trip ETA. */}
+        <Pill
+          icon={<Flag className="h-3.5 w-3.5" />}
+          label="Arrival"
+          value={confirmation && routeData
+            ? formatTime(confirmation.at + (confirmation.operatorEtaMin + Math.round(routeData.durationMin)) * 60_000).toLowerCase()
+            : "—"}
+          // Same cyan as the map's drop-off marker; the "—" placeholder stays neutral.
+          valueClassName={confirmation && routeData ? "text-[#22d3ee]" : undefined}
+        />
       </div>
 
       <div className="mt-8 rounded-2xl border border-primary/30 bg-primary/5 p-3">
@@ -414,11 +427,11 @@ function Field({ icon, value, onChange, label }: { icon: React.ReactNode; value:
   );
 }
 
-function Pill({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function Pill({ icon, label, value, valueClassName }: { icon: React.ReactNode; label: string; value: string; valueClassName?: string }) {
   return (
     <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3">
       <span className="flex items-center gap-2 text-xs text-muted-foreground">{icon} {label}</span>
-      <span className="text-sm font-medium">{value}</span>
+      <span className={cn("text-sm font-medium", valueClassName)}>{value}</span>
     </div>
   );
 }
