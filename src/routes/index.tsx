@@ -7,6 +7,7 @@ import {
   ArrowRight, ShieldCheck, Gauge, Sparkles, Building2, Truck, FileSignature, DollarSign,
 } from "lucide-react";
 import { useOnboarding } from "@/lib/onboarding";
+import { useIdleDownloadPopup } from "@/hooks/useIdleDownloadPopup";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -31,13 +32,7 @@ export const Route = createFileRoute("/")({
 function Landing() {
   const [onb] = useOnboarding();
   const { openDownloads = false } = Route.useSearch();
-  const [showPopup, setShowPopup] = useState(openDownloads);
-
-  useEffect(() => {
-    if (openDownloads) return;
-    const timer = setTimeout(() => setShowPopup(true), 15000);
-    return () => clearTimeout(timer);
-  }, [openDownloads]);
+  const { showPopup, openPopup, closePopup, markShown } = useIdleDownloadPopup({ initiallyOpen: openDownloads });
 
   // The page scrolls on <html>, so snapping has to be enabled there — and only
   // while the homepage is mounted, so other routes keep normal scrolling.
@@ -74,8 +69,8 @@ function Landing() {
   const hoursCap = 50;
 
   return (
-    <AppShell>
-      {showPopup && <DownloadPopup onClose={() => setShowPopup(false)} />}
+    <AppShell onDownloadPopupOpen={markShown}>
+      {showPopup && <DownloadPopup onClose={closePopup} />}
 
       <section className="snap-start relative overflow-hidden bg-gradient-hero">
         <div className="absolute inset-0 grid-bg opacity-30" />
@@ -96,7 +91,7 @@ function Landing() {
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <button
-                  onClick={() => setShowPopup(true)}
+                  onClick={openPopup}
                   className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
                 >
                   {operatorLabel} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />

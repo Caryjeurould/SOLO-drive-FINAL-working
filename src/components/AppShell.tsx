@@ -5,11 +5,23 @@ import { useAuth } from "@/lib/auth";
 import { useState } from "react";
 import { DownloadPopup } from "@/components/DownloadPopup";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  onDownloadPopupOpen,
+}: {
+  children: React.ReactNode;
+  /** Called when the nav opens the Download popup, so a page's idle timer
+   *  can treat it as already shown (see useIdleDownloadPopup). */
+  onDownloadPopupOpen?: () => void;
+}) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [showPopup, setShowPopup] = useState(false);
+  const openPopup = () => {
+    onDownloadPopupOpen?.();
+    setShowPopup(true);
+  };
   const isOperator = pathname.startsWith("/operator");
   const isCustomer = pathname.startsWith("/customer");
 
@@ -19,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   const handleOperatorClick = (e: React.MouseEvent) => {
-    if (!user) { e.preventDefault(); setShowPopup(true); }
+    if (!user) { e.preventDefault(); openPopup(); }
   };
 
   return (
@@ -49,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <nav className="hidden md:flex items-center gap-1 text-sm">
             <button
-                onClick={() => setShowPopup(true)}
+                onClick={openPopup}
                 className="flex items-center gap-2 rounded-lg px-3 py-2 transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary/50"
               >
                 <Gauge className="h-4 w-4" /> Operator
