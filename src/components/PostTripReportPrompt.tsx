@@ -32,7 +32,7 @@ export function PostTripReportPrompt({
   const markGiven = useMarkTripFeedbackGiven();
   const submitReport = useSubmitTripReport();
 
-  const otherParty = role === "rider" ? "driver" : "rider";
+  const otherParty = role === "rider" ? "driver" : "customer";
 
   const handleAllGood = () => {
     markGiven.mutate({ tripRequestId, role }, { onSuccess: onDone });

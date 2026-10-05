@@ -24,7 +24,7 @@ export const Route = createFileRoute("/customer/signup")({
     throw redirect({ to: "/download" });
   },
   head: () => ({
-    meta: [{ title: "Rider Signup — SOLO.drive" }],
+    meta: [{ title: "Customer Signup — SOLO.drive" }],
   }),
   component: CustomerSignup,
 });
@@ -94,7 +94,7 @@ function CustomerSignup() {
           </div>
           <h1 className="mt-6 font-display text-3xl font-semibold">You're approved!</h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Your background check cleared. Welcome to SOLO.drive — your rider account is ready.
+            Your background check cleared. Welcome to SOLO.drive — your customer account is ready.
           </p>
           <Link
             to="/customer/dashboard"
@@ -119,7 +119,7 @@ function CustomerSignup() {
             <div className="font-display text-xl font-semibold">
               SOLO<span className="text-gradient">.drive</span>
             </div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Rider Authorization</div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Customer Authorization</div>
           </div>
         </div>
 
@@ -205,7 +205,7 @@ function Stage1({ onNext, signUp }: {
 
   return (
     <div>
-      <h2 className="font-display text-2xl font-semibold">Create your rider account</h2>
+      <h2 className="font-display text-2xl font-semibold">Create your customer account</h2>
       <p className="mt-1 text-sm text-muted-foreground">Start by setting up your login credentials.</p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
@@ -394,7 +394,7 @@ function Stage3({ userId, email, identityData, onComplete, onBack }: {
         </div>
         <h2 className="mt-4 font-display text-2xl font-semibold">Application Denied</h2>
         <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-          Based on the information provided, we're unable to approve your rider account at this time.
+          Based on the information provided, we're unable to approve your customer account at this time.
         </p>
       </div>
     );
@@ -417,7 +417,7 @@ function Stage3({ userId, email, identityData, onComplete, onBack }: {
     <div>
       <h2 className="font-display text-2xl font-semibold">Background Check</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        A basic background check is required for all riders. Powered by Checkr. Fee: <strong>$9.99</strong>
+        A basic background check is required for all customers. Powered by Checkr. Fee: <strong>$9.99</strong>
       </p>
 
       <div className="mt-5 space-y-4">
@@ -461,7 +461,7 @@ function Stage3({ userId, email, identityData, onComplete, onBack }: {
           >
             <p><strong className="text-foreground">1. Background Check Consent.</strong> You authorize SOLO.drive and its partner Checkr to perform a consumer background report including identity verification and criminal records search.</p>
             <p className="mt-2"><strong className="text-foreground">2. Payment.</strong> A non-refundable fee of $9.99 will be charged to your payment method to cover the cost of the background check.</p>
-            <p className="mt-2"><strong className="text-foreground">3. Rider Conduct.</strong> You agree to treat operators with respect and comply with all applicable laws during trips.</p>
+            <p className="mt-2"><strong className="text-foreground">3. Customer Conduct.</strong> You agree to treat operators with respect and comply with all applicable laws during trips.</p>
             <p className="mt-2"><strong className="text-foreground">4. Independent Operators.</strong> SOLO.drive connects you with self-employed operators. We are a software platform and not the carrier of record.</p>
             <p className="mt-2"><strong className="text-foreground">5. Acceptance.</strong> Checking the box below constitutes your electronic signature and acceptance of these terms.</p>
           </div>

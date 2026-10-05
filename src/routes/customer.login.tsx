@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/customer/login")({
   head: () => ({
-    meta: [{ title: "Rider Sign In — SOLO.drive" }],
+    meta: [{ title: "Customer Sign In — SOLO.drive" }],
   }),
   component: CustomerLoginPage,
 });
@@ -52,14 +52,14 @@ function CustomerLoginPage() {
             <div className="font-display text-2xl font-semibold tracking-tight">
               SOLO<span className="text-gradient">.drive</span>
             </div>
-            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Rider Portal</div>
+            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Customer Portal</div>
           </div>
         </div>
 
         {/* Card */}
         <div className="rounded-3xl border border-border bg-card/80 p-8 shadow-elevated backdrop-blur-2xl">
           <h1 className="font-display text-2xl font-semibold">Welcome back</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in to your rider account</p>
+          <p className="mt-1 text-sm text-muted-foreground">Sign in to your customer account</p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
             <div className="space-y-1.5">

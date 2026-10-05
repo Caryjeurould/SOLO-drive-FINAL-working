@@ -176,7 +176,7 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
                   <ShieldAlert className="h-5 w-5 shrink-0 animate-pulse text-destructive" />
                   <div>
                     <div className="font-semibold text-destructive">
-                      {a.triggeredBy === "operator" ? "Operator" : "Rider"} triggered the panic button
+                      {a.triggeredBy === "operator" ? "Operator" : "Customer"} triggered the panic button
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {a.pickupAddress && a.dropoffAddress ? `${a.pickupAddress} → ${a.dropoffAddress}` : "Trip route unavailable"}
@@ -234,14 +234,14 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
         <Tabs
           defaultValue="operators"
           className="mt-8"
-          onValueChange={(tab) => logEvent.mutate({ action: "view", description: `Opened ${tab} tab`, metadata: { tab } })}
+          onValueChange={(tab) => logEvent.mutate({ action: "view", description: `Opened ${tab === "riders" ? "customers" : tab} tab`, metadata: { tab } })}
         >
           <TabsList className={cn("h-11 w-full", isSuperAdmin ? "max-w-3xl" : canReview ? "max-w-xl" : "max-w-md")}>
             <TabsTrigger value="operators" className={TAB_TRIGGER_CLASS}>
               <Car className="h-3.5 w-3.5" /> Operators ({operators.length})
             </TabsTrigger>
             <TabsTrigger value="riders" className={TAB_TRIGGER_CLASS}>
-              <User className="h-3.5 w-3.5" /> Riders ({riders.length})
+              <User className="h-3.5 w-3.5" /> Customers ({riders.length})
             </TabsTrigger>
             {canReview && (
               <TabsTrigger value="incidents" className={TAB_TRIGGER_CLASS}>
@@ -278,7 +278,7 @@ function AdminDashboard({ admin }: { admin: AdminUser }) {
             {riderLoading ? (
               <LoadingBlock />
             ) : riders.length === 0 ? (
-              <EmptyState icon={<User className="h-8 w-8" />} text="No riders have signed up yet." />
+              <EmptyState icon={<User className="h-8 w-8" />} text="No customers have signed up yet." />
             ) : (
               <div className="space-y-6">
                 {riders.map((r) => (
@@ -651,7 +651,7 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
   const terminateRider = useTerminateRider();
 
   const canWrite = hasRole(admin, "compliance");
-  const fullName = [rider.first_name, rider.last_name].filter(Boolean).join(" ") || "Unnamed rider";
+  const fullName = [rider.first_name, rider.last_name].filter(Boolean).join(" ") || "Unnamed customer";
   const cleared = rider.bg_status === "cleared";
   const suspended = rider.status === "suspended";
   const terminated = rider.status === "terminated";
@@ -672,7 +672,7 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
         action: "view",
         targetTable: "riders",
         targetId: rider.id,
-        description: `Viewed rider record: ${fullName}`,
+        description: `Viewed customer record: ${fullName}`,
       });
     }
   };
@@ -744,7 +744,7 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
           <SectionCard title="Signed Legal Docs" icon={<FileLock2 className="h-3.5 w-3.5" />}>
             <PlaceholderRow label="Itemized per-document signatures" />
             <p className="pt-1 text-[11px] text-muted-foreground">
-              Only a single consent_signed flag is stored for riders today — no per-document trail like operators have.
+              Only a single consent_signed flag is stored for customers today — no per-document trail like operators have.
             </p>
           </SectionCard>
 
@@ -796,7 +796,7 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
               )
             )}
             {reinstateRider.data?.emailSent === false && (
-              <p className="text-[11px] text-warning">Rider reinstated, but the confirmation email failed to send.</p>
+              <p className="text-[11px] text-warning">Customer reinstated, but the confirmation email failed to send.</p>
             )}
 
             {canWrite && !suspended && !terminated && (
@@ -847,7 +847,7 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
               )
             )}
             {issueSuspension.data?.emailSent === false && (
-              <p className="text-[11px] text-warning">Rider suspended, but the notification email failed to send.</p>
+              <p className="text-[11px] text-warning">Customer suspended, but the notification email failed to send.</p>
             )}
 
             {canWrite && !terminated && (
@@ -891,7 +891,7 @@ function RiderCard({ rider, admin }: { rider: AdminRiderRow; admin: AdminUser })
 
           <SectionCard title="Account" icon={<User className="h-3.5 w-3.5" />}>
             <FieldRow label="Joined" value={new Date(rider.created_at).toLocaleDateString()} />
-            <FieldRow label="Rider ID" value={`${rider.id.slice(0, 8)}…`} />
+            <FieldRow label="Customer ID" value={`${rider.id.slice(0, 8)}…`} />
           </SectionCard>
         </div>
       )}
@@ -920,7 +920,7 @@ function SafetyIncidentsTab({
 
   const nameById = new Map<string, string>();
   operators.forEach((o) => nameById.set(o.id, o.name ?? o.email ?? "Unnamed operator"));
-  riders.forEach((r) => nameById.set(r.id, [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email || "Unnamed rider"));
+  riders.forEach((r) => nameById.set(r.id, [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email || "Unnamed customer"));
 
   return (
     <div className="space-y-3">
@@ -946,7 +946,7 @@ function SafetyIncidentsTab({
                   </span>
                   {i.reported_party && (
                     <span className="text-xs text-muted-foreground">
-                      against {i.reported_party === "operator" ? "Operator" : "Rider"} {accusedName}
+                      against {i.reported_party === "operator" ? "Operator" : "Customer"} {accusedName}
                     </span>
                   )}
                   {egregious && (

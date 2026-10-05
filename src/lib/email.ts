@@ -108,12 +108,12 @@ export const sendRiderSuspensionEmail = createServerFn({ method: "POST" })
     const reason = escapeHtml(data.reason);
     await sendViaResend({
       to: data.to,
-      subject: "Your SOLO.drive rider account has been suspended",
+      subject: "Your SOLO.drive customer account has been suspended",
       html: emailShell(
         "Account suspended",
         `
           <p>Hi ${name},</p>
-          <p>Your SOLO.drive rider account has been suspended by our compliance team.</p>
+          <p>Your SOLO.drive customer account has been suspended by our compliance team.</p>
           <p><strong>Category:</strong> ${category}</p>
           <blockquote style="border-left: 3px solid #999; margin: 16px 0; padding: 4px 16px; color: #333;">${reason}</blockquote>
           <p>You will not be able to book rides while your account is suspended.</p>
@@ -130,12 +130,12 @@ export const sendRiderReinstatementEmail = createServerFn({ method: "POST" })
     const name = escapeHtml(data.riderName);
     await sendViaResend({
       to: data.to,
-      subject: "Your SOLO.drive rider account has been reinstated",
+      subject: "Your SOLO.drive customer account has been reinstated",
       html: emailShell(
         "Account reinstated",
         `
           <p>Hi ${name},</p>
-          <p>Good news — your SOLO.drive rider account has been reviewed by our compliance team and reinstated. You can resume booking rides immediately.</p>
+          <p>Good news — your SOLO.drive customer account has been reviewed by our compliance team and reinstated. You can resume booking rides immediately.</p>
           <p>Thanks for your patience while we resolved this.</p>
         `,
       ),
@@ -155,7 +155,7 @@ export const sendComplianceIncidentAlertEmail = createServerFn({ method: "POST" 
     const name = escapeHtml(data.staffName);
     const category = escapeHtml(data.category);
     const description = escapeHtml(data.description);
-    const partyLabel = data.reportedParty === "operator" ? "an Operator" : "a Rider";
+    const partyLabel = data.reportedParty === "operator" ? "an Operator" : "a Customer";
     await sendViaResend({
       to: data.to,
       subject: `New misconduct report — ${data.category}`,

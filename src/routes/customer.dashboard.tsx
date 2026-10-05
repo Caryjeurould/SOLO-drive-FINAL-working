@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/customer/dashboard")({
   head: () => ({
-    meta: [{ title: "Rider Dashboard — SOLO.drive" }],
+    meta: [{ title: "Customer Dashboard — SOLO.drive" }],
   }),
   component: CustomerDashboard,
 });
@@ -106,7 +106,7 @@ function CustomerDashboard() {
 
   const displayName = profile?.first_name
     ? `${profile.first_name} ${profile.last_name ?? ""}`.trim()
-    : user?.email?.split("@")[0] ?? "Rider";
+    : user?.email?.split("@")[0] ?? "Customer";
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -128,12 +128,12 @@ function CustomerDashboard() {
         {/* Header */}
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Rider Dashboard</div>
+            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Customer Dashboard</div>
             <h1 className="mt-1 font-display text-4xl font-semibold">{greeting}, {profile?.first_name ?? displayName}</h1>
             <div className="mt-2 flex items-center gap-2">
               {profile?.bg_status === "cleared" ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs text-success">
-                  <ShieldCheck className="h-3 w-3" /> Verified Rider
+                  <ShieldCheck className="h-3 w-3" /> Verified Customer
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-3 py-1 text-xs text-warning">
