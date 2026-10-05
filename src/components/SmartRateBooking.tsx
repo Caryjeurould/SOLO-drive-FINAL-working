@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { MapboxMap, type RouteData } from "@/components/MapboxMap";
-import { calculateSmartRate } from "@/lib/smart-rate";
+import type { RateBreakdown } from "@/lib/smart-rate";
 import { supabase } from "@/lib/supabase";
 import { DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
@@ -77,37 +77,59 @@ function generatePoNumber(initials: string) {
 function formatTime(ms: number) {
   return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
-/** Fixed Smart Rate figures for the "intro" card — a display, not a quote, so
- *  nothing is calculated or looked up. */
-const INTRO_RATE = {
-  total: "39.15",
-  multiplier: "1.08",
-  base: "4.50",
-  distance: "31.75",
-  fuelAdj: "2.90",
-  peakAdj: "0.00",
-  weekendAdj: "0.00",
-  eventAdj: "0.00",
-};
+/** The Smart Rate shown everywhere this component renders: fixed figures,
+ *  the same whatever the day, time, or route ($4.50 + $31.75 + $2.90 fuel =
+ *  $39.15, ×1.08). Only "Special event nearby" changes it, adding the engine's
+ *  event surcharge (+30% of base + distance = +$10.88 → $50.03, ×1.38).
+ *  Worked in integer cents so the rounding is exact. */
+function fixedSmartRate(specialEvent: boolean): RateBreakdown {
+  const baseC = 450;
+  const distanceC = 3175;
+  const fuelC = 290;
+  const eventC = specialEvent ? Math.round((baseC + distanceC) * 0.3) : 0;
+  const totalC = baseC + distanceC + fuelC + eventC;
+  return {
+    base: baseC / 100,
+    distance: distanceC / 100,
+    fuelAdj: fuelC / 100,
+    peakAdj: 0,
+    weekendAdj: 0,
+    eventAdj: eventC / 100,
+    total: totalC / 100,
+    multiplier: Math.round((totalC / (baseC + distanceC)) * 100) / 100,
+  };
+}
 
 type SmartRateBookingProps = {
   /** "split": the full responsive two-column booking layout (map | panel).
    *  "stacked": a single column, always — for embedding in a narrower slot.
    *  "preview": a compact, non-editable summary card (real map/data, fixed
    *  addresses, Confirm links out to /customer instead of confirming locally).
-   *  "intro": /customer's opening card — the Where-To panel alone as a display
-   *  card (fixed Smart Rate values, no map or route lookup, no Confirm). The
-   *  only live element is a pulsing Verify button that opens the Verify popup.
-   *  Renders just the card; the page supplies the surrounding layout. */
+   *  "intro": the homepage Customer section's opening card — the Where-To panel
+   *  alone as a display card (no map or route lookup, no Confirm). The only
+   *  live element is a pulsing Verify button that opens the Verify popup;
+   *  closing it calls onVerifyClose. Renders just the card; the page supplies
+   *  the surrounding layout. */
   layout?: "split" | "stacked" | "preview" | "intro";
   /** Show the matched-operator identity card (name, avatar, Verify button). */
   showOperatorCard?: boolean;
   /** Called when the visitor wants to open the Downloads popup themselves
    *  (manual "Download the app" link) — Confirm ride never triggers it. */
   onRequestDownload?: () => void;
+  /** "intro" only: called when the Verify popup is closed. */
+  onVerifyClose?: () => void;
+  /** "preview" only: give the Book-A-Ride button the same attention flash
+   *  the intro card's Verify button has. */
+  ctaAttention?: boolean;
 };
 
-export function SmartRateBooking({ layout = "split", showOperatorCard = true, onRequestDownload }: SmartRateBookingProps) {
+export function SmartRateBooking({
+  layout = "split",
+  showOperatorCard = true,
+  onRequestDownload,
+  onVerifyClose,
+  ctaAttention = false,
+}: SmartRateBookingProps) {
   const [pickup, setPickup] = useState("1333 Camelback Rd, Phoenix, AZ");
   const [dropoff, setDropoff] = useState("14765 Scottsdale Rd, Scottsdale, AZ");
   const [event, setEvent] = useState(false);
@@ -134,15 +156,7 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
 
   const handleRouteData = useCallback((d: RouteData) => setRouteData(d), []);
 
-  const now = new Date();
-  const rate = useMemo(() => calculateSmartRate({
-    pickupDistanceMi: 0.6,
-    dropoffDistanceMi: routeData ? routeData.distanceMi : 4.2,
-    hour: now.getHours(),
-    dayOfWeek: now.getDay(),
-    gasPricePerGal: 3.78,
-    specialEvent: event,
-  }), [event, routeData]);
+  const rate = useMemo(() => fixedSmartRate(event), [event]);
 
   // On every Confirm ride, bring the newly revealed CSA block into view — it's
   // usually below the fold (under the map on desktop, under the panel + map on
@@ -229,30 +243,34 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[10px] uppercase tracking-widest text-primary-glow">Smart Rate · locked</div>
-                <div className="mt-1 font-display text-4xl font-semibold">${INTRO_RATE.total}</div>
+                <div className="mt-1 font-display text-4xl font-semibold">${rate.total.toFixed(2)}</div>
               </div>
               <div className="text-right text-xs text-muted-foreground">
-                ×{INTRO_RATE.multiplier} multiplier<br />
+                ×{rate.multiplier.toFixed(2)} multiplier<br />
                 100% to operator
               </div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <Row k="Base" v={`$${INTRO_RATE.base}`} />
-              <Row k="Distance" v={`$${INTRO_RATE.distance}`} />
-              <Row k="Fuel index" v={`+$${INTRO_RATE.fuelAdj}`} />
-              <Row k="Peak time" v={`+$${INTRO_RATE.peakAdj}`} />
-              <Row k="Weekend" v={`+$${INTRO_RATE.weekendAdj}`} />
-              <Row k="Event" v={`+$${INTRO_RATE.eventAdj}`} />
+              <Row k="Base" v={`$${rate.base.toFixed(2)}`} />
+              <Row k="Distance" v={`$${rate.distance.toFixed(2)}`} />
+              <Row k="Fuel index" v={`+$${rate.fuelAdj.toFixed(2)}`} />
+              <Row k="Peak time" v={`+$${rate.peakAdj.toFixed(2)}`} />
+              <Row k="Weekend" v={`+$${rate.weekendAdj.toFixed(2)}`} />
+              <Row k="Event" v={`+$${rate.eventAdj.toFixed(2)}`} />
             </div>
           </div>
         </div>
 
-        {/* Nothing happens on close yet — the next step is still to be designed. */}
+        {/* Closing the popup hands off to the page (the homepage swaps in the
+            Book-A-Ride preview card). */}
         {showOperatorCard && verifyOpen && (
           <VerifyDialog
             operatorName={operatorName}
             docs={verification?.docs ?? []}
-            onClose={() => setVerifyOpen(false)}
+            onClose={() => {
+              setVerifyOpen(false);
+              onVerifyClose?.();
+            }}
           />
         )}
       </>
@@ -337,7 +355,10 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
 
           <Link
             to="/customer"
-            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
+            className={cn(
+              "mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]",
+              ctaAttention && "animate-verify-attention",
+            )}
           >
             Book-A-Ride · ${rate.total.toFixed(2)} <ArrowRight className="h-4 w-4" />
           </Link>

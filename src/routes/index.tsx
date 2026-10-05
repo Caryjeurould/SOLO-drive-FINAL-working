@@ -31,6 +31,8 @@ export const Route = createFileRoute("/")({
 
 function Landing() {
   const [onb] = useOnboarding();
+  // Customer section: has the visitor opened and closed the Verify popup yet?
+  const [riderVerified, setRiderVerified] = useState(false);
   const { openDownloads = false } = Route.useSearch();
   const { showPopup, openPopup, closePopup, markShown } = useIdleDownloadPopup({ initiallyOpen: openDownloads });
 
@@ -281,9 +283,18 @@ function Landing() {
               </p>
             </div>
 
-            <div className="w-full">
-              <SmartRateBooking layout="intro" />
-            </div>
+            {/* Guided flow: the display-only Where-To card with a flashing
+                Verify; once its popup closes, the Book-A-Ride map card (at its
+                original max-w-sm width) with a flashing Book-A-Ride button. */}
+            {riderVerified ? (
+              <div className="mx-auto w-full max-w-sm">
+                <SmartRateBooking layout="preview" ctaAttention />
+              </div>
+            ) : (
+              <div className="w-full">
+                <SmartRateBooking layout="intro" onVerifyClose={() => setRiderVerified(true)} />
+              </div>
+            )}
           </div>
         </div>
       </section>
