@@ -77,12 +77,29 @@ function generatePoNumber(initials: string) {
 function formatTime(ms: number) {
   return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
+/** Fixed Smart Rate figures for the "intro" card — a display, not a quote, so
+ *  nothing is calculated or looked up. */
+const INTRO_RATE = {
+  total: "39.15",
+  multiplier: "1.08",
+  base: "4.50",
+  distance: "31.75",
+  fuelAdj: "2.90",
+  peakAdj: "0.00",
+  weekendAdj: "0.00",
+  eventAdj: "0.00",
+};
+
 type SmartRateBookingProps = {
-  /** "split": /customer's full responsive two-column layout (map | panel).
+  /** "split": the full responsive two-column booking layout (map | panel).
    *  "stacked": a single column, always — for embedding in a narrower slot.
    *  "preview": a compact, non-editable summary card (real map/data, fixed
-   *  addresses, Confirm links out to /customer instead of confirming locally). */
-  layout?: "split" | "stacked" | "preview";
+   *  addresses, Confirm links out to /customer instead of confirming locally).
+   *  "intro": /customer's opening card — the Where-To panel alone as a display
+   *  card (fixed Smart Rate values, no map or route lookup, no Confirm). The
+   *  only live element is a pulsing Verify button that opens the Verify popup.
+   *  Renders just the card; the page supplies the surrounding layout. */
+  layout?: "split" | "stacked" | "preview" | "intro";
   /** Show the matched-operator identity card (name, avatar, Verify button). */
   showOperatorCard?: boolean;
   /** Called when the visitor wants to open the Downloads popup themselves
@@ -95,6 +112,8 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
   const [dropoff, setDropoff] = useState("14765 Scottsdale Rd, Scottsdale, AZ");
   const [event, setEvent] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
+  // "intro" layout: the Verify button pulses until the popup has been opened once.
+  const [verifyOpened, setVerifyOpened] = useState(false);
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [confirmation, setConfirmation] = useState<{ at: number; poNumber: string; operatorEtaMin: number } | null>(null);
   // Nearby-driver cars are ambient map decoration, visible from arrival — kept
@@ -134,6 +153,108 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     csaRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
   }, [confirmation?.at]);
+
+  if (layout === "intro") {
+    return (
+      <>
+        <div className="mx-auto w-full max-w-[420px] rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated">
+          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Where to?</div>
+
+          <div className="mt-4 space-y-2">
+            <DisplayField icon={<span className="h-2.5 w-2.5 rounded-full bg-primary-glow" />} label="Pickup" value={pickup} />
+            <DisplayField icon={<span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />} label="Drop-off" value={dropoff} />
+          </div>
+
+          <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2.5 text-sm">
+            <span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-warning" /> Special event nearby</span>
+            {/* Display-only: same look as the real checkbox, but not focusable or clickable. */}
+            <input
+              type="checkbox"
+              checked={false}
+              onChange={() => {}}
+              tabIndex={-1}
+              aria-readonly="true"
+              className="pointer-events-none h-4 w-4 accent-primary"
+            />
+          </div>
+
+          {showOperatorCard && (
+            <div className="mt-5 rounded-2xl border border-border bg-card p-4">
+              {operatorLoading ? (
+                <div className="flex items-center justify-center py-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : featuredOperator ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground font-display text-lg font-semibold">
+                    {operatorName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-medium">{operatorName}</span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] text-success">
+                        <ShieldCheck className="h-3 w-3" /> Verified
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                      <Star className="h-3 w-3 fill-warning text-warning" /> {ratingLabel}
+                      {vehicleLine && ` · ${vehicleLine}`}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setVerifyOpened(true);
+                      setVerifyOpen(true);
+                    }}
+                    className={cn(
+                      "shrink-0 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs hover:bg-secondary",
+                      // The one live element on the card — pulse until it's been opened.
+                      !verifyOpened && "animate-pulse border-primary text-foreground ring-2 ring-primary/60",
+                    )}
+                  >
+                    Verify
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No operators are currently available in your area.</p>
+              )}
+            </div>
+          )}
+
+          {/* Smart Rate breakdown — fixed display values. */}
+          <div className="mt-5 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-primary-glow">Smart Rate · locked</div>
+                <div className="mt-1 font-display text-4xl font-semibold">${INTRO_RATE.total}</div>
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                ×{INTRO_RATE.multiplier} multiplier<br />
+                100% to operator
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <Row k="Base" v={`$${INTRO_RATE.base}`} />
+              <Row k="Distance" v={`$${INTRO_RATE.distance}`} />
+              <Row k="Fuel index" v={`+$${INTRO_RATE.fuelAdj}`} />
+              <Row k="Peak time" v={`+$${INTRO_RATE.peakAdj}`} />
+              <Row k="Weekend" v={`+$${INTRO_RATE.weekendAdj}`} />
+              <Row k="Event" v={`+$${INTRO_RATE.eventAdj}`} />
+            </div>
+          </div>
+        </div>
+
+        {/* Nothing happens on close yet — the next step is still to be designed. */}
+        {showOperatorCard && verifyOpen && (
+          <VerifyDialog
+            operatorName={operatorName}
+            docs={verification?.docs ?? []}
+            onClose={() => setVerifyOpen(false)}
+          />
+        )}
+      </>
+    );
+  }
 
   if (layout === "preview") {
     return (
@@ -435,6 +556,22 @@ function Field({ icon, value, onChange, label }: { icon: React.ReactNode; value:
         <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-transparent text-sm outline-none" />
       </div>
       <MapPin className="h-4 w-4 text-muted-foreground" />
+    </div>
+  );
+}
+
+/** Read-only twin of Field for the "intro" card: same box, label, and icons,
+ *  but plain text that wraps instead of an input, so full addresses fit at
+ *  phone width. */
+function DisplayField({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center">{icon}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+        <div className="break-words text-sm">{value}</div>
+      </div>
+      <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
     </div>
   );
 }
