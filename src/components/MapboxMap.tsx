@@ -61,6 +61,13 @@ async function mbDirections(a: [number, number], b: [number, number], token: str
   }
 }
 
+// One shared load of the mapbox-gl script. Two overlapping loads (e.g. a map
+// mounting twice in quick succession) used to inject the script twice; when
+// the downloads finished out of order, window.mapboxgl was swapped for a
+// second copy after the map was built, and fitBounds then rejected bounds
+// made from the other copy — the route never got framed.
+let mapboxglLoading: Promise<void> | null = null;
+
 async function loadMapboxGL(token: string): Promise<any> {
   const w = window as any;
   if (!document.getElementById("mapbox-css")) {
@@ -71,13 +78,17 @@ async function loadMapboxGL(token: string): Promise<any> {
     document.head.appendChild(link);
   }
   if (!w.mapboxgl) {
-    await new Promise<void>((res, rej) => {
+    mapboxglLoading ??= new Promise<void>((res, rej) => {
       const s = document.createElement("script");
       s.src = "https://api.mapbox.com/mapbox-gl-js/v3.5.2/mapbox-gl.js";
       s.onload = () => res();
-      s.onerror = () => rej(new Error("mapbox-gl failed to load"));
+      s.onerror = () => {
+        mapboxglLoading = null; // allow a retry on the next mount
+        rej(new Error("mapbox-gl failed to load"));
+      };
       document.head.appendChild(s);
     });
+    await mapboxglLoading;
   }
   w.mapboxgl.accessToken = token;
   return w.mapboxgl;
@@ -118,6 +129,18 @@ export function MapboxMap({
   const drawnForSeedRef = useRef<number | null>(null);
   const onRouteDataRef = useRef(onRouteData);
   onRouteDataRef.current = onRouteData;
+  // The route lookup and the map's own load race each other. The latest
+  // "draw markers + route line + fit" step waits here until the map is ready
+  // (its "load" handler has added the route layer), then runs exactly once —
+  // whichever side finishes last triggers it.
+  const mapReadyRef = useRef(false);
+  const pendingApplyRef = useRef<(() => void) | null>(null);
+  const flushPendingApply = () => {
+    if (!mapReadyRef.current || !pendingApplyRef.current) return;
+    const apply = pendingApplyRef.current;
+    pendingApplyRef.current = null;
+    apply();
+  };
 
   const [token, setToken] = useState<string>(() => {
     if (ENV_TOKEN && ENV_TOKEN !== "your_pk_token_here") return ENV_TOKEN;
@@ -170,6 +193,9 @@ export function MapboxMap({
             layout: { "line-cap": "round", "line-join": "round" },
             paint: { "line-color": "#7c5cff", "line-width": 4, "line-opacity": 0.9 },
           });
+          mapReadyRef.current = true;
+          // A route that arrived before the map finished loading draws now.
+          flushPendingApply();
         });
       } catch (e) {
         console.error("Mapbox init failed:", e);
@@ -178,6 +204,7 @@ export function MapboxMap({
 
     return () => {
       cancelled = true;
+      mapReadyRef.current = false;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       if (map) {
@@ -251,11 +278,12 @@ export function MapboxMap({
           map.fitBounds(bounds, { padding: fitPadding, maxZoom: 15 });
         };
 
-        const map = mapRef.current;
-        if (map) {
-          if (map.loaded()) applyToMap();
-          else map.once("load", applyToMap);
-        }
+        // Don't draw directly: the map may not exist yet, or may report
+        // !loaded() after its one-time "load" event already fired — both used
+        // to drop the route for good. Queue it; it runs now if the map is
+        // ready, otherwise from the map's "load" handler.
+        pendingApplyRef.current = applyToMap;
+        flushPendingApply();
       } finally {
         if (!cancelled) setGeocoding(false);
       }
