@@ -21,8 +21,9 @@ type Props = {
   /** fitBounds padding in px — the default (64) is tuned for /customer's
    *  520px map; pass a smaller explicit value for shorter map containers
    *  (e.g. the homepage preview card) so the same route doesn't get forced
-   *  into a much more zoomed-out fit just because the container is shorter. */
-  fitPadding?: number;
+   *  into a much more zoomed-out fit just because the container is shorter.
+   *  Also accepts per-side values (e.g. extra bottom room for the Mapbox logo). */
+  fitPadding?: number | { top: number; right: number; bottom: number; left: number };
 };
 
 const ENV_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string) || "";

@@ -286,7 +286,10 @@ export function SmartRateBooking({
             pickupAddress={pickup}
             dropoffAddress={dropoff}
             onRouteData={handleRouteData}
-            fitPadding={20}
+            // Homepage card only: a natural margin so the route and its
+            // pickup/drop-off dots sit inside the window, clear of the border,
+            // with extra bottom room to clear the Mapbox logo (bottom-left).
+            fitPadding={{ top: 32, right: 32, bottom: 52, left: 32 }}
           />
 
           <div className="mt-3 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Where to?</div>
