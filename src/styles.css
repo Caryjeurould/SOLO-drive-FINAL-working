@@ -149,3 +149,26 @@
   92% { transform: scale(1); filter: brightness(1); box-shadow: var(--shadow-glow); }
 }
 .animate-chip-flash { animation: chip-flash 3s ease-in-out infinite; }
+
+/* Call-to-action pulse for the intro card's Verify button: a steady glow, a
+   ring that expands outward and fades, and a gentle 1.00 → 1.08 scale, on a
+   1.2s loop. Transform/box-shadow only, so the button's layout size never
+   changes. Reduced-motion visitors get the static glow without the loop. */
+@keyframes verify-attention {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 18px 2px oklch(0.62 0.22 275 / 70%), 0 0 0 0 oklch(0.72 0.20 285 / 75%);
+  }
+  50% { transform: scale(1.08); }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 18px 2px oklch(0.62 0.22 275 / 70%), 0 0 0 12px oklch(0.72 0.20 285 / 0%);
+  }
+}
+.animate-verify-attention {
+  box-shadow: 0 0 18px 2px oklch(0.62 0.22 275 / 70%);
+  animation: verify-attention 1.2s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-verify-attention { animation: none; }
+}

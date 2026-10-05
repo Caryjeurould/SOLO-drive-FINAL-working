@@ -45,7 +45,16 @@ function Landing() {
     const prevPadding = root.style.scrollPaddingTop;
     root.style.scrollSnapType = "y mandatory";
     root.style.scrollPaddingTop = `${header?.offsetHeight ?? 0}px`;
+
+    // Arriving with a section hash (/#operator, /#rider) — from a nav shortcut
+    // on another page, or a direct link — land on that section here, once the
+    // padding above exists. (A router scroll before this point would land a
+    // nav-height off; AppShell's shortcuts skip it for that reason.)
+    const target = window.location.hash ? document.getElementById(window.location.hash.slice(1)) : null;
+    const frame = target ? requestAnimationFrame(() => target.scrollIntoView({ block: "start" })) : 0;
+
     return () => {
+      cancelAnimationFrame(frame);
       root.style.scrollSnapType = prevType;
       root.style.scrollPaddingTop = prevPadding;
     };
@@ -72,7 +81,7 @@ function Landing() {
     <AppShell onDownloadPopupOpen={markShown}>
       {showPopup && <DownloadPopup onClose={closePopup} />}
 
-      <section className="snap-start relative overflow-hidden bg-gradient-hero">
+      <section id="operator" className="snap-start relative overflow-hidden bg-gradient-hero">
         <div className="absolute inset-0 grid-bg opacity-30" />
         <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
@@ -254,7 +263,7 @@ function Landing() {
       </section>
 
       {/* Customer hero */}
-      <section className="snap-start relative overflow-hidden border-t-2 border-border bg-gradient-hero">
+      <section id="rider" className="snap-start relative overflow-hidden border-t-2 border-border bg-gradient-hero">
         <div className="absolute inset-0 grid-bg opacity-30" />
         <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
@@ -272,8 +281,8 @@ function Landing() {
               </p>
             </div>
 
-            <div className="mx-auto w-full max-w-sm">
-              <SmartRateBooking layout="preview" />
+            <div className="w-full">
+              <SmartRateBooking layout="intro" />
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Car, Map, ShieldCheck, FileLock2, Gauge, LogIn, LogOut, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DownloadPopup } from "@/components/DownloadPopup";
 
 export function AppShell({
@@ -24,6 +24,38 @@ export function AppShell({
   };
   const isOperator = pathname.startsWith("/operator");
   const isCustomer = pathname.startsWith("/customer");
+  const isHome = pathname === "/";
+
+  // On the homepage the active tab follows the section in view: Rider once
+  // the Customer section (#rider) reaches the middle of the viewport (so it
+  // also covers "Why Book" below it), Operator above that. Elsewhere it
+  // follows the route, as before.
+  const [homeSection, setHomeSection] = useState<"operator" | "rider">("operator");
+  useEffect(() => {
+    if (!isHome) return;
+    let frame = 0;
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const rider = document.getElementById("rider");
+        setHomeSection(rider && rider.getBoundingClientRect().top <= window.innerHeight / 2 ? "rider" : "operator");
+      });
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [isHome]);
+  const activeTab = isHome ? homeSection : isOperator ? "operator" : isCustomer ? "rider" : null;
+  // Already on the homepage: let the router smooth-scroll to the section.
+  // Coming from another page: don't — it would scroll before the homepage has
+  // applied its nav-height scroll offset and land a nav-height off. The
+  // homepage aligns to the URL hash itself once that offset is in place.
+  const sectionScroll = isHome ? ({ behavior: "smooth", block: "start" } as const) : false;
 
   const handleSignOut = async () => {
     await signOut();
@@ -59,21 +91,31 @@ export function AppShell({
             </div>
           </Link>
 
+          {/* Section shortcuts on the one-page homepage: smooth-scroll to the
+              Operator hero (#operator) or the Customer section (#rider). From any
+              other page they navigate to the homepage and land on that section. */}
           <nav className="hidden md:flex items-center gap-1 text-sm">
-            <button
-                onClick={openPopup}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-              >
-                <Gauge className="h-4 w-4" /> Operator
-              </button>
             <Link
-              to="/customer"
+              to="/"
+              hash="operator"
+              hashScrollIntoView={sectionScroll}
               className={cn(
                 "flex items-center gap-2 rounded-lg px-3 py-2 transition-colors",
-                isCustomer ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
+                activeTab === "operator" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
               )}
             >
-              <Map className="h-4 w-4" /> Rider
+              <Gauge className="h-4 w-4" /> Operator
+            </Link>
+            <Link
+              to="/"
+              hash="rider"
+              hashScrollIntoView={sectionScroll}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 transition-colors",
+                activeTab === "rider" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
+              )}
+            >
+              <Map className="h-4 w-4" /> Customer
             </Link>
           </nav>
 

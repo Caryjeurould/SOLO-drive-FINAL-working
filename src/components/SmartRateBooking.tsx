@@ -208,8 +208,11 @@ export function SmartRateBooking({ layout = "split", showOperatorCard = true, on
                     }}
                     className={cn(
                       "shrink-0 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs hover:bg-secondary",
-                      // The one live element on the card — pulse until it's been opened.
-                      !verifyOpened && "animate-pulse border-primary text-foreground ring-2 ring-primary/60",
+                      // The one live element on the card — a solid gradient fill, glow,
+                      // expanding ring, and gentle scale until it's been opened once.
+                      // Same padding and border width, so the size doesn't change.
+                      !verifyOpened &&
+                        "animate-verify-attention border-transparent bg-gradient-primary text-white",
                     )}
                   >
                     Verify
