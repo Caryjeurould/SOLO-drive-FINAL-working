@@ -99,7 +99,7 @@ function Landing() {
                 <span className="text-gradient">Owned, not rented.</span>
               </h1>
               <p className="mt-6 max-w-2xl text-[15px] leading-[1.6] text-muted-foreground md:text-base md:leading-[1.65]">
-                SOLO.drive is a digital marketplace &amp; technology platform and does not provide transportation or delivery services. Independent Operators pay a monthly access fee to operate their app-based businesses, which connect directly with Customers who request specific transportation &amp; delivery services. Both parties agree that each transaction is its own separate Contracted Services Agreement (CSA).
+                SOLO.drive is a digital marketplace &amp; technology platform and does not provide transportation or delivery services. Independent Operators pay a monthly access fee to operate their app-based businesses, which connect directly with Customers who request specific transportation &amp; delivery services. Both parties agree that each transaction is its own separate Contracted Services Agreement&nbsp;(CSA).
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -274,11 +274,13 @@ function Landing() {
         <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28 [@media(min-width:768px)_and_(min-height:881px)_and_(max-height:960px)]:py-20 [@media(min-width:768px)_and_(max-height:880px)]:py-8">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary-glow">
-                <Sparkles className="h-3 w-3" /> Zero commission · Flat $499.99 / month
-              </span>
-              {/* One line each, as written — sized so the longest line fits the column. */}
-              <h2 className="mt-6 font-display text-[clamp(1.25rem,6.8vw,1.75rem)] font-semibold leading-[1.08] tracking-tight sm:text-4xl lg:text-[2.625rem] xl:text-5xl">
+              {/* One line each, as written. Sized to match the Operator hero
+                  heading where the column allows it, otherwise the largest size
+                  at which "with Smart-Rate pricing." (~11.2× the font size wide)
+                  still fits on one line: phones scale with the screen; sm 48px
+                  and md 60px (Operator: 48 / 72); lg
+                  42px and xl 54px, limited by the 478px / 612px column. */}
+              <h2 className="font-display text-[clamp(1.25rem,calc((100vw-2rem)/11.5),3rem)] font-semibold leading-[1.08] tracking-tight sm:text-5xl md:text-6xl lg:text-[2.625rem] xl:text-[3.375rem]">
                 <span className="block whitespace-nowrap">Ownership Matters.</span>
                 <span className="block whitespace-nowrap text-gradient">Operator owned,</span>
                 <span className="block whitespace-nowrap text-gradient">with Smart-Rate pricing.</span>
