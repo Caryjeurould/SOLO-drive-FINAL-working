@@ -1,13 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { DownloadPopup } from "@/components/DownloadPopup";
+import { useDownloadPopup } from "@/components/DownloadPopupProvider";
 import { AppShell } from "@/components/AppShell";
 import { SmartRateBooking } from "@/components/SmartRateBooking";
 import {
   ArrowRight, ShieldCheck, Gauge, Sparkles, Building2, Truck, FileSignature, DollarSign,
 } from "lucide-react";
 import { useOnboarding } from "@/lib/onboarding";
-import { useIdleDownloadPopup } from "@/hooks/useIdleDownloadPopup";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -34,7 +33,12 @@ function Landing() {
   // Customer section: has the visitor opened and closed the Verify popup yet?
   const [riderVerified, setRiderVerified] = useState(false);
   const { openDownloads = false } = Route.useSearch();
-  const { showPopup, openPopup, closePopup, markShown } = useIdleDownloadPopup({ initiallyOpen: openDownloads });
+  const { openPopup } = useDownloadPopup();
+  // ?openDownloads=true (e.g. the redirect from /operator/onboarding) opens the
+  // shared Downloads pop-up right away.
+  useEffect(() => {
+    if (openDownloads) openPopup();
+  }, [openDownloads, openPopup]);
 
   // The page scrolls on <html>, so snapping has to be enabled there — and only
   // while the homepage is mounted, so other routes keep normal scrolling.
@@ -80,8 +84,7 @@ function Landing() {
   const hoursCap = 50;
 
   return (
-    <AppShell onDownloadPopupOpen={markShown}>
-      {showPopup && <DownloadPopup onClose={closePopup} />}
+    <AppShell>
 
       {/* Short (laptop-height) screens get tighter vertical spacing so the
           whole hero — with its long marketplace paragraph — fits on one

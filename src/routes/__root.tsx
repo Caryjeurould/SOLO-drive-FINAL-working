@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
+import { DownloadPopupProvider } from "@/components/DownloadPopupProvider";
 
 import appCss from "../styles.css?url";
 
@@ -116,7 +117,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Outlet />
+        <DownloadPopupProvider>
+          <Outlet />
+        </DownloadPopupProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

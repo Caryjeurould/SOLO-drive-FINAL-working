@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { SmartRateBooking } from "@/components/SmartRateBooking";
-import { DownloadPopup } from "@/components/DownloadPopup";
-import { useIdleDownloadPopup } from "@/hooks/useIdleDownloadPopup";
+import { useDownloadPopup } from "@/components/DownloadPopupProvider";
 
 export const Route = createFileRoute("/customer")({
   head: () => ({
@@ -15,11 +14,10 @@ export const Route = createFileRoute("/customer")({
 });
 
 function CustomerBooking() {
-  const { showPopup, openPopup, closePopup, markShown } = useIdleDownloadPopup();
+  const { openPopup } = useDownloadPopup();
 
   return (
-    <AppShell onDownloadPopupOpen={markShown}>
-      {showPopup && <DownloadPopup onClose={closePopup} />}
+    <AppShell>
       <SmartRateBooking layout="split" onRequestDownload={openPopup} />
     </AppShell>
   );
