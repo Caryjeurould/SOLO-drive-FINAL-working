@@ -99,7 +99,7 @@ function Landing() {
                 <span className="text-gradient">Owned, not rented.</span>
               </h1>
               <p className="mt-6 max-w-2xl text-[15px] leading-[1.6] text-muted-foreground md:text-base md:leading-[1.65]">
-                SOLO.drive is a digital marketplace &amp; technology platform and SOLO.drive does not provide transportation or delivery services, although our technology connects Independent Operators who pay a monthly access fee to operate their businesses to provide Customers who solicit specific transportation &amp; delivery services via a Contracted Svs Agreement (CSA), which both parties agree that each transaction is its own separate contract for services.
+                SOLO.drive is a digital marketplace &amp; technology platform and does not provide transportation or delivery services. Independent Operators pay a monthly access fee to operate their app-based businesses, which connect directly with Customers who request specific transportation &amp; delivery services. Both parties agree that each transaction is its own separate Contracted Services Agreement (CSA).
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
