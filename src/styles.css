@@ -172,3 +172,25 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-verify-attention { animation: none; }
 }
+
+/* Contracted Services "magnify" after Confirm ride: grows over 0.6s to
+   --csa-scale (set per run to what fits the viewport) with a bright accent
+   glow, holds ~5s, then eases back over 0.6s to exactly its normal size.
+   6.2s total → 0.6s ≈ 9.68%. Transform only, so nothing around it reflows.
+   Reduced-motion visitors get the glow without the scaling. */
+@keyframes csa-magnify {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 oklch(0.72 0.20 285 / 0%); }
+  9.68%, 90.32% {
+    transform: scale(var(--csa-scale, 1.12));
+    box-shadow: 0 0 0 2px oklch(0.72 0.20 285 / 85%), 0 0 36px 4px oklch(0.62 0.22 275 / 60%);
+  }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 oklch(0.72 0.20 285 / 0%); }
+}
+@keyframes csa-glow {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.72 0.20 285 / 0%); }
+  9.68%, 90.32% { box-shadow: 0 0 0 2px oklch(0.72 0.20 285 / 85%), 0 0 36px 4px oklch(0.62 0.22 275 / 60%); }
+}
+.animate-csa-magnify { animation: csa-magnify 6.2s ease-in-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-csa-magnify { animation-name: csa-glow; }
+}

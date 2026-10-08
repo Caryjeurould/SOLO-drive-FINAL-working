@@ -162,10 +162,56 @@ export function SmartRateBooking({
   // usually below the fold (under the map on desktop, under the panel + map on
   // mobile), so without this confirming looks like it did nothing.
   const csaRef = useRef<HTMLDivElement>(null);
+  // Once that scroll has landed, the CSA box briefly magnifies (see
+  // .animate-csa-magnify) so the contract details are easy to read. Holds the
+  // confirmation it's for and the scale to use; cleared when it finishes.
+  const [csaMagnify, setCsaMagnify] = useState<{ at: number; scale: number } | null>(null);
   useEffect(() => {
+    setCsaMagnify(null);
     if (!confirmation) return;
+    const el = csaRef.current;
+    if (!el) return;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    csaRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+    el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+
+    // Wait for the scroll to settle (position unchanged for ~200ms, or 2.5s
+    // max), then size the magnify to what fits: 112% on desktop, ~103.5% at
+    // phone width, never so large that the scaled box would cross 8px from the
+    // viewport edges or slide under the sticky nav.
+    const startedAt = performance.now();
+    let lastY = window.scrollY;
+    let stableSince = startedAt;
+    const timer = window.setInterval(() => {
+      const now = performance.now();
+      if (window.scrollY !== lastY) {
+        lastY = window.scrollY;
+        stableSince = now;
+        return;
+      }
+      if (now - stableSince < 200 && now - startedAt < 2500) return;
+      window.clearInterval(timer);
+      const navBottom = () => document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+      // Scaling from the center grows each side by size × (scale − 1) / 2.
+      // Width can't be helped by scrolling, so it caps the scale; then, if
+      // the box sits too close to the top or bottom for that growth (it also
+      // gets taller as its text renders, after the scroll), nudge the page
+      // by just the shortfall before measuring the vertical fit.
+      const gap = 8;
+      const wanted = window.innerWidth < 640 ? 1.035 : 1.12;
+      let r = el.getBoundingClientRect();
+      const roomX = Math.max(0, Math.min(r.left - gap, window.innerWidth - r.right - gap));
+      const scaleX = Math.min(wanted, 1 + (2 * roomX) / r.width);
+      const needY = (r.height * (scaleX - 1)) / 2 + gap;
+      const below = window.innerHeight - r.bottom;
+      const above = r.top - navBottom();
+      if (below < needY && above > needY) window.scrollBy({ top: Math.min(needY - below, above - needY), behavior: "auto" });
+      else if (above < needY && below > needY) window.scrollBy({ top: -Math.min(needY - above, below - needY), behavior: "auto" });
+      r = el.getBoundingClientRect();
+      const roomY = Math.max(0, Math.min(r.top - navBottom() - gap, window.innerHeight - r.bottom - gap));
+      const scale = Math.min(scaleX, 1 + (2 * roomY) / r.height);
+      setCsaMagnify({ at: confirmation.at, scale: Math.max(1, scale) });
+    }, 50);
+    return () => window.clearInterval(timer);
   }, [confirmation?.at]);
 
   if (layout === "intro") {
@@ -430,7 +476,21 @@ export function SmartRateBooking({
         />
       </div>
 
-      <div ref={csaRef} className="mt-8 scroll-mb-6 scroll-mt-24 rounded-2xl border border-primary/30 bg-primary/5 p-3">
+      <div
+        ref={csaRef}
+        className={cn(
+          "mt-8 scroll-mb-6 scroll-mt-24 rounded-2xl border border-primary/30 bg-primary/5 p-3",
+          // Above its neighbors only while magnified; afterwards the classes
+          // drop off and the box is exactly as before.
+          csaMagnify && csaMagnify.at === confirmation?.at && "animate-csa-magnify relative z-10",
+        )}
+        style={csaMagnify && csaMagnify.at === confirmation?.at
+          ? ({ "--csa-scale": String(csaMagnify.scale) } as React.CSSProperties)
+          : undefined}
+        onAnimationEnd={(e) => {
+          if (e.target === e.currentTarget) setCsaMagnify(null);
+        }}
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-glow">
             <FileSignature className="h-3 w-3" /> Contracted Services
@@ -530,7 +590,11 @@ export function SmartRateBooking({
 
       <button
         onClick={handleConfirm}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.01]"
+        className={cn(
+          "mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.01]",
+          // Same attention flash as Book-A-Ride while no ride is confirmed.
+          !confirmation && "animate-verify-attention",
+        )}
       >
         Confirm ride · ${rate.total.toFixed(2)} <ArrowRight className="h-4 w-4" />
       </button>
