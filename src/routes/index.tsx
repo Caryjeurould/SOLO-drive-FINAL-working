@@ -334,8 +334,8 @@ function Landing() {
               Why Book with SOLO.drive
             </h2>
             <p className="mt-4 text-base text-muted-foreground md:text-lg">
-              Every ride is a direct contract with a verified independent Operator — transparent pricing, no
-              middleman, no surprises.
+              Every trip or delivery is its own Contracted Services Agreement with a verified independent
+              Operator, with transparent pricing and no surprises.
             </p>
           </div>
         </div>
@@ -345,16 +345,19 @@ function Landing() {
             <Pillar
               icon={<DollarSign className="h-5 w-5" />}
               title="Transparent Pricing"
+              body="See your Smart-Rate price with every line item, and agree to it before you book."
               size="lg"
             />
             <Pillar
               icon={<ShieldCheck className="h-5 w-5" />}
               title="Verified Operators"
+              body="Each Operator's insurance and credentials are checked and visible before you confirm."
               size="lg"
             />
             <Pillar
               icon={<Sparkles className="h-5 w-5" />}
               title="No Surge Surprises"
+              body="Your price is locked once you agree. Anything that affects it is shown up front, never added later."
               size="lg"
             />
           </div>
