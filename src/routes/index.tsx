@@ -83,21 +83,23 @@ function Landing() {
     <AppShell onDownloadPopupOpen={markShown}>
       {showPopup && <DownloadPopup onClose={closePopup} />}
 
+      {/* Short (laptop-height) screens get tighter vertical spacing so the
+          whole hero — with its long marketplace paragraph — fits on one
+          screen under the nav; taller screens keep the original spacing. */}
       <section id="operator" className="snap-start relative overflow-hidden bg-gradient-hero">
         <div className="absolute inset-0 grid-bg opacity-30" />
-        <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28">
+        <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28 [@media(min-width:768px)_and_(min-height:881px)_and_(max-height:960px)]:py-20 [@media(min-width:768px)_and_(max-height:880px)]:py-8">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary-glow">
                 <Sparkles className="h-3 w-3" /> Zero commission · Flat $499.99 / month
               </span>
-              <h1 className="mt-6 font-display text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl">
+              <h1 className="mt-6 font-display text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl [@media(min-width:768px)_and_(max-height:880px)]:text-[3.5rem]">
                 Your fleet of one.<br />
                 <span className="text-gradient">Owned, not rented.</span>
               </h1>
-              <p className="mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
-                SOLO.drive is the plug-and-play platform for independent taxi and delivery operators.
-                No per-ride commissions. Transparent Smart Rate pricing. Verified credentials your customers can actually see.
+              <p className="mt-6 max-w-2xl text-[15px] leading-[1.6] text-muted-foreground md:text-base md:leading-[1.65]">
+                SOLO.drive is a digital marketplace &amp; technology platform and SOLO.drive does not provide transportation or delivery services, although our technology connects Independent Operators who pay a monthly access fee to operate their businesses to provide Customers who solicit specific transportation &amp; delivery services via a Contracted Svs Agreement (CSA), which both parties agree that each transaction is its own separate contract for services.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
