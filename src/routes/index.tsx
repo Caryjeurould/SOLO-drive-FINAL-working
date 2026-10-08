@@ -267,21 +267,41 @@ function Landing() {
       </section>
 
       {/* Customer hero */}
+      {/* Same short-screen spacing tiers as the Operator hero, so the section
+          (with the Where-To card) fits one laptop-height screen. */}
       <section id="rider" className="snap-start relative overflow-hidden border-t-2 border-border bg-gradient-hero">
         <div className="absolute inset-0 grid-bg opacity-30" />
-        <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28">
+        <div className="relative mx-auto max-w-7xl px-4 py-20 md:px-8 md:py-28 [@media(min-width:768px)_and_(min-height:881px)_and_(max-height:960px)]:py-20 [@media(min-width:768px)_and_(max-height:880px)]:py-8">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary-glow">
                 <Sparkles className="h-3 w-3" /> Zero commission · Flat $499.99 / month
               </span>
-              <h2 className="mt-6 font-display text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl">
-                Your fleet of one.<br />
-                <span className="text-gradient">Owned, not rented.</span>
+              {/* One line each, as written — sized so the longest line fits the column. */}
+              <h2 className="mt-6 font-display text-[clamp(1.25rem,6.8vw,1.75rem)] font-semibold leading-[1.08] tracking-tight sm:text-4xl lg:text-[2.625rem] xl:text-5xl">
+                <span className="block whitespace-nowrap">Ownership Matters.</span>
+                <span className="block whitespace-nowrap text-gradient">Operator owned,</span>
+                <span className="block whitespace-nowrap text-gradient">with Smart-Rate pricing.</span>
               </h2>
-              <p className="mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
-                SOLO.drive is the plug-and-play platform for independent taxi and delivery operators.
-                No per-ride commissions. Transparent Smart Rate pricing. Verified credentials your customers can actually see.
+              <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-muted-foreground md:text-base md:leading-[1.65]">
+                SOLO.drive empowers Operators to take ownership of their own transportation &amp; delivery businesses. A Customer who needs transportation or delivery can use the SOLO.drive platform to request service directly from an Operator.
+              </p>
+              <ul className="mt-4 max-w-2xl space-y-2 text-[15px] leading-[1.55] text-muted-foreground md:text-base">
+                <li className="flex gap-2.5">
+                  <span aria-hidden="true" className="mt-[0.6em] h-1.5 w-1.5 shrink-0 rounded-full bg-primary-glow" />
+                  <span><strong className="font-semibold text-foreground">Direct contracting:</strong> Connect directly with local, independent transportation and delivery business owners.</span>
+                </li>
+                <li className="flex gap-2.5">
+                  <span aria-hidden="true" className="mt-[0.6em] h-1.5 w-1.5 shrink-0 rounded-full bg-primary-glow" />
+                  <span><strong className="font-semibold text-foreground">Upfront pricing:</strong> Review and agree to a transparent price for your specific service request before booking.</span>
+                </li>
+                <li className="flex gap-2.5">
+                  <span aria-hidden="true" className="mt-[0.6em] h-1.5 w-1.5 shrink-0 rounded-full bg-primary-glow" />
+                  <span><strong className="font-semibold text-foreground">Independent choice:</strong> Benefit from a competitive marketplace of independent Operators.</span>
+                </li>
+              </ul>
+              <p className="mt-4 max-w-2xl text-xs italic leading-relaxed text-muted-foreground/80">
+                Operators and Customers also agree that any disputes will be resolved through third-party mediation. SOLO.drive has no affiliation with, direction of, or financial responsibility for that mediation.
               </p>
             </div>
 
