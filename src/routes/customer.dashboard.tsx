@@ -26,7 +26,10 @@ const profileSchema = z.object({
   phone: z.string().min(10, "Enter a valid phone number"),
   dob: z.string().min(1, "Required"),
 });
-type ProfileData = z.infer<typeof profileSchema>;
+// firstName/lastName are loaded into the form (reset) and read on save, but
+// there are no name inputs and the schema doesn't list them, so validation
+// drops them and they're absent at save time — hence optional here.
+type ProfileData = z.infer<typeof profileSchema> & { firstName?: string; lastName?: string };
 
 type RiderProfile = {
   first_name: string | null;
@@ -92,7 +95,7 @@ function CustomerDashboard() {
       phone: data.phone,
       dob: data.dob,
     }).eq("id", user!.id);
-    setProfile((p) => p ? { ...p, first_name: data.firstName, last_name: data.lastName, phone: data.phone, dob: data.dob } : p);
+    setProfile((p) => p ? { ...p, first_name: data.firstName ?? p.first_name, last_name: data.lastName ?? p.last_name, phone: data.phone, dob: data.dob } : p);
     setSaving(false);
     setSaveSuccess(true);
     setEditing(false);

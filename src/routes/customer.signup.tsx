@@ -287,13 +287,13 @@ function Stage2({ onNext, onBack }: { onNext: (data: IdentityData) => void; onBa
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>Card number</Label>
-              <Input placeholder="1234 5678 9012 3456" onChange={formatCard} {...register("cardNumber")} />
+              <Input placeholder="1234 5678 9012 3456" {...register("cardNumber")} />
               {errors.cardNumber && <p className="text-xs text-destructive">{errors.cardNumber.message}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Expiry</Label>
-                <Input placeholder="MM/YY" onChange={formatExpiry} {...register("cardExpiry")} />
+                <Input placeholder="MM/YY" {...register("cardExpiry")} />
                 {errors.cardExpiry && <p className="text-xs text-destructive">{errors.cardExpiry.message}</p>}
               </div>
               <div className="space-y-1.5">

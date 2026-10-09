@@ -10,6 +10,7 @@
     "build:vercel": "vite build --config vite.config.vercel.ts && node scripts/patch-vercel-runtime.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
+    "typecheck": "node node_modules/typescript/bin/tsc --noEmit -p .",
     "format": "prettier --write ."
   },
   "dependencies": {

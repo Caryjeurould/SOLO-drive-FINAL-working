@@ -71,7 +71,7 @@ function Vault() {
         ) : (
           <div className="mt-8 grid gap-3">
             {REQUIRED_DOC_TYPES.map((dt) => {
-              const doc = docMap[dt.id];
+              const doc = docMap[dt.id] as (typeof documents)[number] | undefined; // not every type is uploaded yet
               const status = doc?.status ?? "missing";
               const needsExpiration = EXPIRING_DOC_TYPES.has(dt.id);
 
