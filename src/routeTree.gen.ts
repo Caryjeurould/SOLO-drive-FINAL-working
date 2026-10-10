@@ -17,10 +17,16 @@ import { Route as CustomerRouteImport } from './routes/customer'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OperatorVaultRouteImport } from './routes/operator.vault'
+import { Route as OperatorStartRouteImport } from './routes/operator.start'
+import { Route as OperatorSignupRouteImport } from './routes/operator.signup'
 import { Route as OperatorOnboardingRouteImport } from './routes/operator.onboarding'
+import { Route as OperatorLoginRouteImport } from './routes/operator.login'
+import { Route as OperatorDownloadRouteImport } from './routes/operator.download'
 import { Route as CustomerTripRouteImport } from './routes/customer.trip'
+import { Route as CustomerStartRouteImport } from './routes/customer.start'
 import { Route as CustomerSignupRouteImport } from './routes/customer.signup'
 import { Route as CustomerLoginRouteImport } from './routes/customer.login'
+import { Route as CustomerDownloadRouteImport } from './routes/customer.download'
 import { Route as CustomerDashboardRouteImport } from './routes/customer.dashboard'
 
 const SignupRoute = SignupRouteImport.update({
@@ -63,14 +69,39 @@ const OperatorVaultRoute = OperatorVaultRouteImport.update({
   path: '/vault',
   getParentRoute: () => OperatorRoute,
 } as any)
+const OperatorStartRoute = OperatorStartRouteImport.update({
+  id: '/start',
+  path: '/start',
+  getParentRoute: () => OperatorRoute,
+} as any)
+const OperatorSignupRoute = OperatorSignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => OperatorRoute,
+} as any)
 const OperatorOnboardingRoute = OperatorOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
   getParentRoute: () => OperatorRoute,
 } as any)
+const OperatorLoginRoute = OperatorLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => OperatorRoute,
+} as any)
+const OperatorDownloadRoute = OperatorDownloadRouteImport.update({
+  id: '/download',
+  path: '/download',
+  getParentRoute: () => OperatorRoute,
+} as any)
 const CustomerTripRoute = CustomerTripRouteImport.update({
   id: '/trip',
   path: '/trip',
+  getParentRoute: () => CustomerRoute,
+} as any)
+const CustomerStartRoute = CustomerStartRouteImport.update({
+  id: '/start',
+  path: '/start',
   getParentRoute: () => CustomerRoute,
 } as any)
 const CustomerSignupRoute = CustomerSignupRouteImport.update({
@@ -81,6 +112,11 @@ const CustomerSignupRoute = CustomerSignupRouteImport.update({
 const CustomerLoginRoute = CustomerLoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => CustomerRoute,
+} as any)
+const CustomerDownloadRoute = CustomerDownloadRouteImport.update({
+  id: '/download',
+  path: '/download',
   getParentRoute: () => CustomerRoute,
 } as any)
 const CustomerDashboardRoute = CustomerDashboardRouteImport.update({
@@ -98,10 +134,16 @@ export interface FileRoutesByFullPath {
   '/operator': typeof OperatorRouteWithChildren
   '/signup': typeof SignupRoute
   '/customer/dashboard': typeof CustomerDashboardRoute
+  '/customer/download': typeof CustomerDownloadRoute
   '/customer/login': typeof CustomerLoginRoute
   '/customer/signup': typeof CustomerSignupRoute
+  '/customer/start': typeof CustomerStartRoute
   '/customer/trip': typeof CustomerTripRoute
+  '/operator/download': typeof OperatorDownloadRoute
+  '/operator/login': typeof OperatorLoginRoute
   '/operator/onboarding': typeof OperatorOnboardingRoute
+  '/operator/signup': typeof OperatorSignupRoute
+  '/operator/start': typeof OperatorStartRoute
   '/operator/vault': typeof OperatorVaultRoute
 }
 export interface FileRoutesByTo {
@@ -113,10 +155,16 @@ export interface FileRoutesByTo {
   '/operator': typeof OperatorRouteWithChildren
   '/signup': typeof SignupRoute
   '/customer/dashboard': typeof CustomerDashboardRoute
+  '/customer/download': typeof CustomerDownloadRoute
   '/customer/login': typeof CustomerLoginRoute
   '/customer/signup': typeof CustomerSignupRoute
+  '/customer/start': typeof CustomerStartRoute
   '/customer/trip': typeof CustomerTripRoute
+  '/operator/download': typeof OperatorDownloadRoute
+  '/operator/login': typeof OperatorLoginRoute
   '/operator/onboarding': typeof OperatorOnboardingRoute
+  '/operator/signup': typeof OperatorSignupRoute
+  '/operator/start': typeof OperatorStartRoute
   '/operator/vault': typeof OperatorVaultRoute
 }
 export interface FileRoutesById {
@@ -129,10 +177,16 @@ export interface FileRoutesById {
   '/operator': typeof OperatorRouteWithChildren
   '/signup': typeof SignupRoute
   '/customer/dashboard': typeof CustomerDashboardRoute
+  '/customer/download': typeof CustomerDownloadRoute
   '/customer/login': typeof CustomerLoginRoute
   '/customer/signup': typeof CustomerSignupRoute
+  '/customer/start': typeof CustomerStartRoute
   '/customer/trip': typeof CustomerTripRoute
+  '/operator/download': typeof OperatorDownloadRoute
+  '/operator/login': typeof OperatorLoginRoute
   '/operator/onboarding': typeof OperatorOnboardingRoute
+  '/operator/signup': typeof OperatorSignupRoute
+  '/operator/start': typeof OperatorStartRoute
   '/operator/vault': typeof OperatorVaultRoute
 }
 export interface FileRouteTypes {
@@ -146,10 +200,16 @@ export interface FileRouteTypes {
     | '/operator'
     | '/signup'
     | '/customer/dashboard'
+    | '/customer/download'
     | '/customer/login'
     | '/customer/signup'
+    | '/customer/start'
     | '/customer/trip'
+    | '/operator/download'
+    | '/operator/login'
     | '/operator/onboarding'
+    | '/operator/signup'
+    | '/operator/start'
     | '/operator/vault'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -161,10 +221,16 @@ export interface FileRouteTypes {
     | '/operator'
     | '/signup'
     | '/customer/dashboard'
+    | '/customer/download'
     | '/customer/login'
     | '/customer/signup'
+    | '/customer/start'
     | '/customer/trip'
+    | '/operator/download'
+    | '/operator/login'
     | '/operator/onboarding'
+    | '/operator/signup'
+    | '/operator/start'
     | '/operator/vault'
   id:
     | '__root__'
@@ -176,10 +242,16 @@ export interface FileRouteTypes {
     | '/operator'
     | '/signup'
     | '/customer/dashboard'
+    | '/customer/download'
     | '/customer/login'
     | '/customer/signup'
+    | '/customer/start'
     | '/customer/trip'
+    | '/operator/download'
+    | '/operator/login'
     | '/operator/onboarding'
+    | '/operator/signup'
+    | '/operator/start'
     | '/operator/vault'
   fileRoutesById: FileRoutesById
 }
@@ -251,6 +323,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperatorVaultRouteImport
       parentRoute: typeof OperatorRoute
     }
+    '/operator/start': {
+      id: '/operator/start'
+      path: '/start'
+      fullPath: '/operator/start'
+      preLoaderRoute: typeof OperatorStartRouteImport
+      parentRoute: typeof OperatorRoute
+    }
+    '/operator/signup': {
+      id: '/operator/signup'
+      path: '/signup'
+      fullPath: '/operator/signup'
+      preLoaderRoute: typeof OperatorSignupRouteImport
+      parentRoute: typeof OperatorRoute
+    }
     '/operator/onboarding': {
       id: '/operator/onboarding'
       path: '/onboarding'
@@ -258,11 +344,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperatorOnboardingRouteImport
       parentRoute: typeof OperatorRoute
     }
+    '/operator/login': {
+      id: '/operator/login'
+      path: '/login'
+      fullPath: '/operator/login'
+      preLoaderRoute: typeof OperatorLoginRouteImport
+      parentRoute: typeof OperatorRoute
+    }
+    '/operator/download': {
+      id: '/operator/download'
+      path: '/download'
+      fullPath: '/operator/download'
+      preLoaderRoute: typeof OperatorDownloadRouteImport
+      parentRoute: typeof OperatorRoute
+    }
     '/customer/trip': {
       id: '/customer/trip'
       path: '/trip'
       fullPath: '/customer/trip'
       preLoaderRoute: typeof CustomerTripRouteImport
+      parentRoute: typeof CustomerRoute
+    }
+    '/customer/start': {
+      id: '/customer/start'
+      path: '/start'
+      fullPath: '/customer/start'
+      preLoaderRoute: typeof CustomerStartRouteImport
       parentRoute: typeof CustomerRoute
     }
     '/customer/signup': {
@@ -279,6 +386,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CustomerLoginRouteImport
       parentRoute: typeof CustomerRoute
     }
+    '/customer/download': {
+      id: '/customer/download'
+      path: '/download'
+      fullPath: '/customer/download'
+      preLoaderRoute: typeof CustomerDownloadRouteImport
+      parentRoute: typeof CustomerRoute
+    }
     '/customer/dashboard': {
       id: '/customer/dashboard'
       path: '/dashboard'
@@ -291,15 +405,19 @@ declare module '@tanstack/react-router' {
 
 interface CustomerRouteChildren {
   CustomerDashboardRoute: typeof CustomerDashboardRoute
+  CustomerDownloadRoute: typeof CustomerDownloadRoute
   CustomerLoginRoute: typeof CustomerLoginRoute
   CustomerSignupRoute: typeof CustomerSignupRoute
+  CustomerStartRoute: typeof CustomerStartRoute
   CustomerTripRoute: typeof CustomerTripRoute
 }
 
 const CustomerRouteChildren: CustomerRouteChildren = {
   CustomerDashboardRoute: CustomerDashboardRoute,
+  CustomerDownloadRoute: CustomerDownloadRoute,
   CustomerLoginRoute: CustomerLoginRoute,
   CustomerSignupRoute: CustomerSignupRoute,
+  CustomerStartRoute: CustomerStartRoute,
   CustomerTripRoute: CustomerTripRoute,
 }
 
@@ -308,12 +426,20 @@ const CustomerRouteWithChildren = CustomerRoute._addFileChildren(
 )
 
 interface OperatorRouteChildren {
+  OperatorDownloadRoute: typeof OperatorDownloadRoute
+  OperatorLoginRoute: typeof OperatorLoginRoute
   OperatorOnboardingRoute: typeof OperatorOnboardingRoute
+  OperatorSignupRoute: typeof OperatorSignupRoute
+  OperatorStartRoute: typeof OperatorStartRoute
   OperatorVaultRoute: typeof OperatorVaultRoute
 }
 
 const OperatorRouteChildren: OperatorRouteChildren = {
+  OperatorDownloadRoute: OperatorDownloadRoute,
+  OperatorLoginRoute: OperatorLoginRoute,
   OperatorOnboardingRoute: OperatorOnboardingRoute,
+  OperatorSignupRoute: OperatorSignupRoute,
+  OperatorStartRoute: OperatorStartRoute,
   OperatorVaultRoute: OperatorVaultRoute,
 }
 

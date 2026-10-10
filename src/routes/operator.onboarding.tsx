@@ -44,7 +44,7 @@ const STAGES = [
 
 function InstalledAppOnboarding() {
   const navigate = useNavigate();
-  const allowed = useInstalledAppOnly(() => navigate({ to: "/", search: { openDownloads: true }, replace: true }));
+  const allowed = useInstalledAppOnly("operator", () => navigate({ to: "/", search: { openDownloads: true }, replace: true }));
   return allowed ? <OnboardingWizard /> : null;
 }
 

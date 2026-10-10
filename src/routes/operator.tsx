@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { OperatorGate } from "@/components/OperatorGate";
+import { appHead } from "@/lib/pwa";
 import { PostTripReportPrompt } from "@/components/PostTripReportPrompt";
 import { PanicButton } from "@/components/PanicButton";
 import {
@@ -62,11 +63,15 @@ function useOperatorActiveTrip(operatorId: string | undefined) {
 }
 
 export const Route = createFileRoute("/operator")({
+  // Links only the Operator app's manifest (plus its iPhone icon/title);
+  // every /operator/* page inherits it.
   head: () => ({
     meta: [
       { title: "Operator Dashboard — SOLO.drive" },
       { name: "description", content: "Manage your independent operator status, weekly hours, subscription, and verified documents." },
+      ...appHead("operator").meta,
     ],
+    links: appHead("operator").links,
   }),
   component: OperatorDashboardGated,
 });

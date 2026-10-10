@@ -23,7 +23,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-function LoginPage() {
+export function LoginPage() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);

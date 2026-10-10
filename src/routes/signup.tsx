@@ -29,7 +29,7 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
-function SignupPage() {
+export function SignupPage() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
   const [done, setDone] = useState(false);

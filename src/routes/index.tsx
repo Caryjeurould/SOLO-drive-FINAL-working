@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useDownloadPopup } from "@/components/DownloadPopupProvider";
 import { AppShell } from "@/components/AppShell";
@@ -106,12 +106,12 @@ function Landing() {
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <button
-                  onClick={openPopup}
+                <Link
+                  to="/operator/download"
                   className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
                 >
-                  {operatorLabel} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </button>
+                  Download Now <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </Link>
               </div>
 
               <div className="mt-10 grid grid-cols-3 gap-6 max-w-md">
@@ -305,6 +305,14 @@ function Landing() {
                   <span><strong className="font-semibold text-foreground">Independent choice:</strong> Benefit from a competitive marketplace of independent Operators.</span>
                 </li>
               </ul>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <Link
+                  to="/customer/download"
+                  className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
+                >
+                  Download Now <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </Link>
+              </div>
               <p className="mt-4 max-w-2xl text-xs italic leading-relaxed text-muted-foreground/80">
                 Operators and Customers also agree that any disputes will be resolved through third-party mediation. SOLO.drive has no affiliation with, direction of, or financial responsibility for that mediation.
               </p>

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { getInstalledAppKind } from "@/lib/pwa";
 
 export const Route = createFileRoute("/customer/login")({
   head: () => ({
@@ -26,6 +27,10 @@ function CustomerLoginPage() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
+  // "Create one": Customer signup inside the installed Customer app, the
+  // Customer install page in a browser tab (decided after first render).
+  const [inCustomerApp, setInCustomerApp] = useState(false);
+  useEffect(() => setInCustomerApp(getInstalledAppKind() === "customer"), []);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -84,7 +89,7 @@ function CustomerLoginPage() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             No account yet?{" "}
-            <Link to="/download" className="text-primary-glow hover:underline">Create one</Link>
+            <Link to={inCustomerApp ? "/customer/signup" : "/customer/download"} className="text-primary-glow hover:underline">Create one</Link>
           </p>
         </div>
       </div>

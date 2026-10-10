@@ -4,13 +4,15 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
 import { DownloadPopupProvider } from "@/components/DownloadPopupProvider";
-import { registerServiceWorker } from "@/lib/pwa";
-import { useEffect } from "react";
+import { registerServiceWorker, getInstalledAppKind, appRedirectFor } from "@/lib/pwa";
+import { useEffect, useRef } from "react";
 
 import appCss from "../styles.css?url";
 
@@ -88,7 +90,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#040819" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-title", content: "SOLO.drive" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     ],
     links: [
@@ -96,9 +97,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
-      { rel: "icon", type: "image/png", sizes: "192x192", href: "/icons/icon-192.png" },
+      // Each app section (/operator, /customer) adds its own manifest, iPhone
+      // icon and title — see appHead() in lib/pwa — never both.
+      { rel: "icon", type: "image/png", sizes: "192x192", href: "/icons/operator-192.png" },
     ],
   }),
   shellComponent: RootShell,
@@ -118,7 +119,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__soloInstallPrompt=e;window.dispatchEvent(new Event('solo:installprompt'));});",
+              "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();var l=document.querySelector('link[rel=manifest]');window.__soloInstallPrompt=e;window.__soloInstallManifest=l?l.href:null;window.dispatchEvent(new Event('solo:installprompt'));});",
           }}
         />
       </head>
@@ -142,9 +143,35 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <DownloadPopupProvider>
+          <InstalledAppGuard />
           <Outlet />
         </DownloadPopupProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
+}
+
+/** Inside an installed app (Operator or Customer), keeps the visitor on that
+ *  app's own pages: anything belonging to the other app — or to neither, like
+ *  the homepage or /download — is replaced by this app's start screen. Runs
+ *  after render, so it never affects server rendering; does nothing in a
+ *  browser tab. */
+function InstalledAppGuard() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const firstRun = useRef(true);
+  useEffect(() => {
+    const initialLoad = firstRun.current;
+    firstRun.current = false;
+    const kind = getInstalledAppKind();
+    if (!kind) return;
+    const to = appRedirectFor(kind, pathname);
+    if (!to || to === pathname) return;
+    // A page opened directly (fresh load) may still be hydrating; switching
+    // routes under it breaks the router, so do a plain page replace instead.
+    // In-app clicks afterwards navigate normally.
+    if (initialLoad) window.location.replace(to);
+    else navigate({ to, replace: true });
+  }, [pathname, navigate]);
+  return null;
 }

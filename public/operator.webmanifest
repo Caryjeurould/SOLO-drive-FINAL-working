@@ -1,0 +1,16 @@
+{
+  "id": "/operator/",
+  "name": "SOLO.drive Operator",
+  "short_name": "SOLO Operator",
+  "description": "Run your independent transportation & delivery business on SOLO.drive.",
+  "start_url": "/operator/start?app=operator",
+  "scope": "/operator/",
+  "display": "standalone",
+  "background_color": "#040819",
+  "theme_color": "#040819",
+  "icons": [
+    { "src": "/icons/operator-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/operator-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/operator-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

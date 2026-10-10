@@ -24,28 +24,28 @@ export function DownloadPopup({ onClose }: DownloadPopupProps) {
 
         <div className="space-y-3">
           <Link
-            to="/download"
+            to="/operator/download"
             className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4 transition-all hover:border-primary/40 hover:bg-primary/5"
           >
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
               <Car className="h-6 w-6 text-primary-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold">Operate & Own</div>
+              <div className="font-semibold">Operator App</div>
               <div className="text-xs text-muted-foreground mt-1 leading-relaxed">For Operators — run your logistics business</div>
             </div>
             <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </Link>
 
           <Link
-            to="/download"
+            to="/customer/download"
             className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4 transition-all hover:border-success/40 hover:bg-success/5"
           >
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-success shadow-glow">
               <MapPin className="h-6 w-6 text-primary-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold">Book & Save</div>
+              <div className="font-semibold">Customer App</div>
               <div className="text-xs text-muted-foreground mt-1 leading-relaxed">For Customers — transparent pricing, verified owner operators</div>
             </div>
             <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />

@@ -71,7 +71,7 @@ type IdentityData = z.infer<typeof identitySchema>;
 
 function InstalledAppSignup() {
   const navigate = useNavigate();
-  const allowed = useInstalledAppOnly(() => navigate({ to: "/download", replace: true }));
+  const allowed = useInstalledAppOnly("customer", () => navigate({ to: "/download", replace: true }));
   return allowed ? <CustomerSignup /> : null;
 }
 
