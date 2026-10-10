@@ -9,6 +9,8 @@ import {
 } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
 import { DownloadPopupProvider } from "@/components/DownloadPopupProvider";
+import { registerServiceWorker } from "@/lib/pwa";
+import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
 
@@ -82,12 +84,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      // Installable app (PWA): status-bar color and iPhone home-screen mode.
+      { name: "theme-color", content: "#040819" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-title", content: "SOLO.drive" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
+      { rel: "icon", type: "image/png", sizes: "192x192", href: "/icons/icon-192.png" },
     ],
   }),
   shellComponent: RootShell,
@@ -102,6 +113,14 @@ function RootShell({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+        {/* Catch the browser's one-time install prompt before the app's own
+            JavaScript has loaded (it can fire that early); lib/pwa picks it up. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__soloInstallPrompt=e;window.dispatchEvent(new Event('solo:installprompt'));});",
+          }}
+        />
       </head>
       <body>
         {children}
@@ -113,6 +132,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Minimal service worker so browsers can install SOLO.drive (see public/sw.js).
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

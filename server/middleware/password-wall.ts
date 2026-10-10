@@ -10,8 +10,11 @@ import {
 const COOKIE_NAME = "solo-auth";
 const PASSWORD = process.env.APP_PASSWORD ?? "SOLOM3$";
 
-const EXEMPT_PREFIXES = ["/assets/", "/_build/", "/_nitro/"];
-const EXEMPT_EXACT = new Set(["/favicon.ico", "/favicon.svg", "/robots.txt"]);
+// /icons/, /manifest.webmanifest and /sw.js are the installable-app files:
+// browsers fetch them without the password cookie, and they hold no private
+// content. Everything else stays behind the wall.
+const EXEMPT_PREFIXES = ["/assets/", "/_build/", "/_nitro/", "/icons/"];
+const EXEMPT_EXACT = new Set(["/favicon.ico", "/favicon.svg", "/robots.txt", "/manifest.webmanifest", "/sw.js"]);
 
 export default defineEventHandler(async (event) => {
   const path = event.path ?? "/";

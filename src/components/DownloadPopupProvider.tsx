@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { DownloadPopup } from "@/components/DownloadPopup";
 
 const IDLE_MS = 15000;
@@ -52,6 +53,17 @@ export function DownloadPopupProvider({ children }: { children: React.ReactNode 
     setOpen(false);
     restartTimer();
   }, [restartTimer]);
+
+  // The pop-up lives at the app root, so it would otherwise stay open over the
+  // next page — e.g. after following its own link to /download. Close it on
+  // any page change (which, like any close, restarts the idle countdown).
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const lastPathRef = useRef(pathname);
+  useEffect(() => {
+    if (pathname === lastPathRef.current) return;
+    lastPathRef.current = pathname;
+    if (openRef.current) closePopup();
+  }, [pathname, closePopup]);
 
   useEffect(() => {
     const onActivity = () => {

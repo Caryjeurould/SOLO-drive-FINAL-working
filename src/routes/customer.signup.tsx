@@ -14,19 +14,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useInstalledAppOnly } from "@/lib/pwa";
 
 export const Route = createFileRoute("/customer/signup")({
   // The real signup form must never be reachable on the public website —
   // no exceptions, regardless of auth or how the visitor arrived. It only
-  // exists inside the installed Customer app. Every hit here bounces to
-  // /download before anything else renders.
-  beforeLoad: () => {
-    throw redirect({ to: "/download" });
-  },
+  // exists inside the installed Customer app. Every hit from a browser tab
+  // bounces to /download, with nothing of this page ever shown. Not
+  // server-rendered: whether this is the installed app can only be known in
+  // the browser, and the form never appears in the public site's HTML.
+  ssr: false,
   head: () => ({
     meta: [{ title: "Customer Signup — SOLO.drive" }],
   }),
-  component: CustomerSignup,
+  component: InstalledAppSignup,
 });
 
 const STAGES = [
@@ -67,6 +68,12 @@ const identitySchema = z.object({
   cardCvc: z.string().min(3, "Invalid CVC"),
 });
 type IdentityData = z.infer<typeof identitySchema>;
+
+function InstalledAppSignup() {
+  const navigate = useNavigate();
+  const allowed = useInstalledAppOnly(() => navigate({ to: "/download", replace: true }));
+  return allowed ? <CustomerSignup /> : null;
+}
 
 function CustomerSignup() {
   const { signUp, user, loading: authLoading } = useAuth();

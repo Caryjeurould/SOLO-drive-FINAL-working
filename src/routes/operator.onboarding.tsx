@@ -15,22 +15,24 @@ import { useUpsertOperator } from "@/hooks/useOperatorProfile";
 import { useDocuments, useUploadDocument } from "@/hooks/useDocuments";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { useInstalledAppOnly } from "@/lib/pwa";
 
 export const Route = createFileRoute("/operator/onboarding")({
   // The real onboarding form must never be reachable on the public website —
   // no exceptions, regardless of auth or how the visitor arrived. It only
-  // exists inside the installed Operator app. Every hit here bounces to the
-  // homepage with the Downloads popup open, before anything else renders.
-  beforeLoad: () => {
-    throw redirect({ to: "/", search: { openDownloads: true } });
-  },
+  // exists inside the installed Operator app. Every hit from a browser tab
+  // bounces to the homepage with the Downloads popup open, with nothing of
+  // this page ever shown. Not server-rendered: whether this is the installed
+  // app can only be known in the browser, and the wizard never appears in the
+  // public site's HTML.
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Operator Authorization — SOLO.drive" },
       { name: "description", content: "Complete the four-stage SmartLogix Authorization to operate on SOLO.drive." },
     ],
   }),
-  component: OnboardingWizard,
+  component: InstalledAppOnboarding,
 });
 
 const STAGES = [
@@ -39,6 +41,12 @@ const STAGES = [
   { n: 3, title: "Background Check", icon: FileSearch },
   { n: 4, title: "Business & Insurance", icon: Building2 },
 ] as const;
+
+function InstalledAppOnboarding() {
+  const navigate = useNavigate();
+  const allowed = useInstalledAppOnly(() => navigate({ to: "/", search: { openDownloads: true }, replace: true }));
+  return allowed ? <OnboardingWizard /> : null;
+}
 
 function OnboardingWizard() {
   const [state, update] = useOnboarding();

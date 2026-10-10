@@ -4,6 +4,7 @@ import {
   Car, Download, Share, Plus, Chrome, Smartphone,
   ArrowRight, CheckCircle2,
 } from "lucide-react";
+import { isInstalledApp, getInstallPrompt, clearInstallPrompt, onInstallPromptChange } from "@/lib/pwa";
 
 export const Route = createFileRoute("/download")({
   head: () => ({
@@ -25,17 +26,15 @@ function DownloadPage() {
     else setPlatform("desktop");
 
     // Check if already installed
-    if (window.matchMedia("(display-mode: standalone)").matches) {
+    if (isInstalledApp()) {
       setInstalled(true);
     }
 
-    // Capture install prompt for Android/Desktop
-    const handler = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    // The browser's install prompt (Android/Desktop Chrome, Edge) is captured
+    // app-wide in lib/pwa as soon as it fires — it often fires before this
+    // page opens — so read it now and whenever it changes.
+    setDeferredPrompt(getInstallPrompt());
+    return onInstallPromptChange(() => setDeferredPrompt(getInstallPrompt()));
   }, []);
 
   const handleInstall = async () => {
@@ -43,7 +42,7 @@ function DownloadPage() {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === "accepted") setInstalled(true);
-      setDeferredPrompt(null);
+      clearInstallPrompt(); // a prompt can only be used once
     }
   };
 
