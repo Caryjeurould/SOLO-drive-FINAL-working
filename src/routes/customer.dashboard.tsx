@@ -50,7 +50,7 @@ type Trip = {
 };
 
 function CustomerDashboard() {
-  const { user, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -64,9 +64,10 @@ function CustomerDashboard() {
   });
 
   useEffect(() => {
+    if (authLoading) return; // wait for a saved sign-in to be restored
     if (!user) { navigate({ to: "/customer/login" }); return; }
     loadData();
-  }, [user]);
+  }, [user, authLoading]);
 
   const loadData = async () => {
     setLoading(true);

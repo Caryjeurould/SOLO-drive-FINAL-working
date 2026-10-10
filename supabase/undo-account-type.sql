@@ -1,4 +1,4 @@
--- UNDO for supabase/migrations/20261010120000_enforce_account_type.sql
+-- UNDO for supabase/migrations/20261010204214_enforce_account_type.sql
 --
 -- Restores every access rule that migration changed, exactly as it was before
 -- (captured from the live database on 2026-10-10), and removes the
