@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Car, ArrowRight, Loader2 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { useAuth, getAccountType, takeAuthMessage, WRONG_APP_MESSAGE } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 function CustomerLoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, signOut } = useAuth();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
   // "Create one": Customer signup inside the installed Customer app, the
@@ -36,10 +36,22 @@ function CustomerLoginPage() {
     resolver: zodResolver(schema),
   });
 
+  // A wrong-type session signed out elsewhere (AccountTypeGuard) explains why here.
+  useEffect(() => {
+    const m = takeAuthMessage();
+    if (m) setServerError(m);
+  }, []);
+
   const onSubmit = async (data: FormData) => {
     setServerError(null);
     const { error } = await signIn(data.email, data.password);
     if (error) { setServerError(error.message); return; }
+    // The Customer app signs in Customer accounts only.
+    if ((await getAccountType()) !== "customer") {
+      await signOut();
+      setServerError(WRONG_APP_MESSAGE);
+      return;
+    }
     navigate({ to: "/customer/dashboard" });
   };
 

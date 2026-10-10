@@ -196,7 +196,7 @@ function CustomerSignup() {
 // ── Stage 1: Account Creation ────────────────────────────────────────────────
 function Stage1({ onNext, signUp }: {
   onNext: (data: AccountData, uid: string) => void;
-  signUp: (email: string, password: string) => Promise<{ data: { user: { id: string } | null }; error: { message: string } | null }>;
+  signUp: (email: string, password: string, accountType: "customer") => Promise<{ data: { user: { id: string } | null }; error: { message: string } | null }>;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<AccountData>({
@@ -205,7 +205,7 @@ function Stage1({ onNext, signUp }: {
 
   const onSubmit = async (data: AccountData) => {
     setServerError(null);
-    const { data: authData, error } = await signUp(data.email, data.password);
+    const { data: authData, error } = await signUp(data.email, data.password, "customer");
     if (error) { setServerError(error.message); return; }
     onNext(data, authData?.user?.id ?? "");
   };

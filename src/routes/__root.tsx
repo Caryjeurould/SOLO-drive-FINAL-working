@@ -9,9 +9,10 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { AuthProvider } from "@/lib/auth";
+import { AuthProvider, useAuth, setAuthMessage, WRONG_APP_MESSAGE } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import { DownloadPopupProvider } from "@/components/DownloadPopupProvider";
-import { registerServiceWorker, getInstalledAppKind, appRedirectFor } from "@/lib/pwa";
+import { registerServiceWorker, getInstalledAppKind, appRedirectFor, appForPath } from "@/lib/pwa";
 import { useEffect, useRef } from "react";
 
 import appCss from "../styles.css?url";
@@ -144,6 +145,7 @@ function RootComponent() {
       <AuthProvider>
         <DownloadPopupProvider>
           <InstalledAppGuard />
+          <AccountTypeGuard />
           <Outlet />
         </DownloadPopupProvider>
       </AuthProvider>
@@ -173,5 +175,39 @@ function InstalledAppGuard() {
     if (initialLoad) window.location.replace(to);
     else navigate({ to, replace: true });
   }, [pathname, navigate]);
+  return null;
+}
+
+/** Account-type check for a session restored when an app opens (or that
+ *  reaches the wrong pages): inside an installed app the account must be that
+ *  app's type; in a browser tab, Operator pages need an Operator account (a
+ *  Customer account must never reach anything Operator — Operators may use
+ *  Customer pages). A wrong-type session is signed out right away and sent to
+ *  that app's sign-in, which shows WRONG_APP_MESSAGE. Network errors never
+ *  sign anyone out; only a definite wrong or missing type does. */
+function AccountTypeGuard() {
+  const { user, signOut } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const checked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user) { checked.current = null; return; }
+    const app = getInstalledAppKind();
+    const required = app ?? (appForPath(pathname) === "operator" ? "operator" : null);
+    if (!required) return;
+    const key = `${user.id}:${required}`;
+    if (checked.current === key) return;
+    let cancelled = false;
+    supabase.auth.getUser().then(async ({ data, error }) => {
+      if (cancelled || error || !data.user) return;
+      const type = data.user.app_metadata?.account_type;
+      if (type === required) { checked.current = key; return; }
+      await signOut();
+      setAuthMessage(WRONG_APP_MESSAGE);
+      const to = required === "customer" ? "/customer/login" : app ? "/operator/login" : "/login";
+      navigate({ to, replace: true });
+    });
+    return () => { cancelled = true; };
+  }, [user, pathname, signOut, navigate]);
   return null;
 }

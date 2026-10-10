@@ -1,10 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Car, ArrowRight, Loader2 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { useAuth, getAccountType, takeAuthMessage, WRONG_APP_MESSAGE } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 export function LoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, signOut } = useAuth();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -34,11 +34,23 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
+  // A wrong-type session signed out elsewhere (AccountTypeGuard) explains why here.
+  useEffect(() => {
+    const m = takeAuthMessage();
+    if (m) setServerError(m);
+  }, []);
+
   const onSubmit = async (data: FormData) => {
     setServerError(null);
     const { error } = await signIn(data.email, data.password);
     if (error) {
       setServerError(error.message);
+      return;
+    }
+    // The Operator app signs in Operator accounts only.
+    if ((await getAccountType()) !== "operator") {
+      await signOut();
+      setServerError(WRONG_APP_MESSAGE);
       return;
     }
     navigate({ to: "/operator" });
