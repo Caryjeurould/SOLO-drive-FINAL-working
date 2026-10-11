@@ -8,17 +8,33 @@ import {
   setResponseStatus,
   html,
 } from "h3";
+import { ROLE_COOKIE, roleRedirectFor, type SiteRole } from "../../src/lib/site-role";
 
 const COOKIE_NAME = "solo-auth";
+const COOKIE_OPTIONS = {
+  secure: true,
+  maxAge: 60 * 60 * 24 * 30, // 30 days
+  sameSite: "lax",
+  path: "/",
+} as const;
 
-// The password comes only from the APP_PASSWORD setting (Vercel). Without it
-// the site fails closed: every request is refused (see below).
+// Two passwords, both only from Vercel settings: APP_PASSWORD (admin — the
+// real site, as always) and VISITOR_PASSWORD (visitor — the Operator demo,
+// database switched off). Without APP_PASSWORD the site fails closed: every
+// request is refused (see below). Without VISITOR_PASSWORD, or if it's the
+// same as APP_PASSWORD, there's no visitor sign-in.
 const PASSWORD = process.env.APP_PASSWORD || null;
+const VISITOR_PASSWORD =
+  process.env.VISITOR_PASSWORD && process.env.VISITOR_PASSWORD !== PASSWORD ? process.env.VISITOR_PASSWORD : null;
 
 // The cookie holds an HMAC of a fixed label keyed with the password, so it
-// can't be guessed or forged without the password, and changing the password
-// signs everyone out.
+// can't be guessed or forged without the password, and changing a password
+// signs out everyone who used it. The admin value is unchanged from before,
+// so admins stay signed in; the visitor value uses its own label.
 const AUTH_TOKEN = PASSWORD ? createHmac("sha256", PASSWORD).update("solo-auth:v1").digest("hex") : null;
+const VISITOR_TOKEN = VISITOR_PASSWORD
+  ? createHmac("sha256", VISITOR_PASSWORD).update("solo-auth:v1:visitor").digest("hex")
+  : null;
 
 /** Constant-time string comparison (hashing first makes the lengths equal). */
 function safeEqual(a: string, b: string): boolean {
@@ -47,18 +63,32 @@ export default defineEventHandler(async (event) => {
   }
 
   const cookie = getCookie(event, COOKIE_NAME);
-  if (cookie && safeEqual(cookie, AUTH_TOKEN)) return;
+  const role: SiteRole | null = !cookie
+    ? null
+    : safeEqual(cookie, AUTH_TOKEN)
+      ? "admin"
+      : VISITOR_TOKEN && safeEqual(cookie, VISITOR_TOKEN)
+        ? "visitor"
+        : null;
+  if (role) {
+    // Tell the page which role it is (the signed cookie above is hidden
+    // from page scripts). Rewritten whenever it doesn't match.
+    if (getCookie(event, ROLE_COOKIE) !== role) setCookie(event, ROLE_COOKIE, role, COOKIE_OPTIONS);
+    const to = roleRedirectFor(role, path);
+    if (to) return sendRedirect(event, to, 302);
+    return;
+  }
 
   if (event.method === "POST" && path === "/__auth") {
     const body = await readBody<{ password?: string }>(event);
-    if (typeof body?.password === "string" && safeEqual(body.password, PASSWORD)) {
-      setCookie(event, COOKIE_NAME, AUTH_TOKEN, {
-        httpOnly: true,
-        secure: true,
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-        sameSite: "lax",
-        path: "/",
-      });
+    const typed = typeof body?.password === "string" ? body.password : null;
+    const token =
+      typed !== null && safeEqual(typed, PASSWORD) ? AUTH_TOKEN :
+      typed !== null && VISITOR_PASSWORD && VISITOR_TOKEN && safeEqual(typed, VISITOR_PASSWORD) ? VISITOR_TOKEN :
+      null;
+    if (token) {
+      setCookie(event, COOKIE_NAME, token, { ...COOKIE_OPTIONS, httpOnly: true });
+      setCookie(event, ROLE_COOKIE, token === AUTH_TOKEN ? "admin" : "visitor", COOKIE_OPTIONS);
       return sendRedirect(event, "/", 302);
     }
     return html(passwordHtml(true));

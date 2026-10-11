@@ -8,15 +8,19 @@ export function LegalDocViewer({
   expectedName,
   signed,
   onSign,
+  prefill = false,
 }: {
   title: string;
   body: string;
   expectedName: string;
   signed?: { name: string; signature: string; signedAt: string };
   onSign: (sig: { name: string; signature: string; signedAt: string }) => void;
+  /** Visitor demo: the signature box starts filled with the visitor's name,
+   *  so signing is one tap. */
+  prefill?: boolean;
 }) {
-  const [scrolledEnd, setScrolledEnd] = useState(!!signed);
-  const [sig, setSig] = useState(signed?.signature ?? "");
+  const [scrolledEnd, setScrolledEnd] = useState(!!signed || prefill);
+  const [sig, setSig] = useState(signed?.signature ?? (prefill ? expectedName : ""));
   const ref = useRef<HTMLDivElement>(null);
 
   // Short documents don't overflow the box, so there's nothing to scroll and

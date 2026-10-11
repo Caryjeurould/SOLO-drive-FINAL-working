@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import { AuthError, type Session, type User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { useIsVisitor } from "./site-role";
+import { demoUser, resetDemo, useDemoState } from "./demo";
 
 /** Every account is exactly one type, chosen at sign-up and stored by the
  *  database where the user can't change it (see the enforce_account_type
@@ -49,7 +51,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Visitor demo: no real sign-in at all — the pretend demo Operator is
+  // signed in once the demo's name screen is done.
+  const demo = useDemoState();
+  const visitor = useIsVisitor();
+
   useEffect(() => {
+    if (visitor) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -65,7 +73,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [visitor]);
+
+  if (visitor) {
+    const off = () => Promise.resolve({ data: { user: null, session: null }, error: new AuthError("Demo mode: accounts are switched off.") });
+    const demoSession = demo.started ? demoUser() : null;
+    return (
+      <AuthContext.Provider
+        value={{
+          user: demoSession,
+          session: null,
+          loading: false,
+          signUp: off as AuthCtx["signUp"],
+          signIn: off as AuthCtx["signIn"],
+          signOut: () => { resetDemo(); return Promise.resolve({ error: null }); },
+        }}
+      >
+        {children}
+      </AuthContext.Provider>
+    );
+  }
 
   return (
     <AuthContext.Provider

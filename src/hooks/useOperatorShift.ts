@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { isVisitor } from "@/lib/site-role";
+import { demoShift, newDemoShift, setDemoShift } from "@/lib/demo";
 import { useAuth } from "@/lib/auth";
 
 export type ShiftServiceType = "rideshare" | "delivery" | "both";
@@ -42,6 +44,7 @@ export function useActiveShift() {
     queryKey: ["operator-shift", "active", user?.id],
     enabled: !!user,
     queryFn: async (): Promise<OperatorShift | null> => {
+      if (isVisitor()) return demoShift();
       const { data, error } = await supabase
         .from("operator_shifts")
         .select("*")
@@ -62,6 +65,7 @@ export function useGoOnline() {
 
   return useMutation({
     mutationFn: async (serviceType: ShiftServiceType) => {
+      if (isVisitor()) { const shift = newDemoShift(serviceType); setDemoShift(shift); return shift; }
       const pos = await getCurrentPosition();
       const { data, error } = await supabase
         .from("operator_shifts")
@@ -88,6 +92,7 @@ export function useGoOffline() {
 
   return useMutation({
     mutationFn: async (shiftId: string) => {
+      if (isVisitor()) { setDemoShift(null); return; }
       const { error } = await supabase
         .from("operator_shifts")
         .update({ ended_at: new Date().toISOString() })
@@ -109,6 +114,12 @@ export function useLocationPing(shiftId: string | null | undefined): boolean {
   useEffect(() => {
     if (!shiftId) {
       setLocationAvailable(false);
+      return;
+    }
+
+    // Demo: no location is read or sent anywhere.
+    if (isVisitor()) {
+      setLocationAvailable(true);
       return;
     }
 

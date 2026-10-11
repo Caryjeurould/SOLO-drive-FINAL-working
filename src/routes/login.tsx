@@ -5,6 +5,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Car, ArrowRight, Loader2 } from "lucide-react";
 import { useAuth, getAccountType, takeAuthMessage, WRONG_APP_MESSAGE } from "@/lib/auth";
+import { getInstalledAppKind } from "@/lib/pwa";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,10 @@ export function LoginPage() {
   const { signIn, signOut } = useAuth();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
+  // "Create one": Operator signup inside the installed Operator app, the
+  // Operator install page in a browser tab (decided after first render).
+  const [inOperatorApp, setInOperatorApp] = useState(false);
+  useEffect(() => setInOperatorApp(getInstalledAppKind() === "operator"), []);
 
   const {
     register,
@@ -135,7 +140,7 @@ export function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             No account yet?{" "}
-            <Link to="/signup" className="text-primary-glow hover:underline">
+            <Link to={inOperatorApp ? "/signup" : "/operator/download"} className="text-primary-glow hover:underline">
               Create one
             </Link>
           </p>

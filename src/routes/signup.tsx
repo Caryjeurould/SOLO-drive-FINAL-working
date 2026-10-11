@@ -8,8 +8,13 @@ import { useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { useInstalledAppOnly } from "@/lib/pwa";
 
 export const Route = createFileRoute("/signup")({
+  // Operator account creation exists only inside the installed Operator app,
+  // like onboarding: browser tabs go to the homepage with the Downloads pop-up
+  // open, and the form is never in the public site's HTML.
+  ssr: false,
   head: () => ({
     meta: [{ title: "Create account — SOLO.drive" }],
   }),
@@ -30,6 +35,12 @@ const schema = z
 type FormData = z.infer<typeof schema>;
 
 export function SignupPage() {
+  const navigate = useNavigate();
+  const allowed = useInstalledAppOnly("operator", () => navigate({ to: "/", search: { openDownloads: true }, replace: true }));
+  return allowed ? <SignupForm /> : null;
+}
+
+function SignupForm() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
   const [done, setDone] = useState(false);

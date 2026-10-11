@@ -13,6 +13,7 @@ import { AuthProvider, useAuth, setAuthMessage, WRONG_APP_MESSAGE } from "@/lib/
 import { supabase } from "@/lib/supabase";
 import { DownloadPopupProvider } from "@/components/DownloadPopupProvider";
 import { registerServiceWorker, getInstalledAppKind, appRedirectFor, appForPath } from "@/lib/pwa";
+import { getSiteRole, isVisitor, roleRedirectFor } from "@/lib/site-role";
 import { useEffect, useRef } from "react";
 
 import appCss from "../styles.css?url";
@@ -145,6 +146,7 @@ function RootComponent() {
       <AuthProvider>
         <DownloadPopupProvider>
           <InstalledAppGuard />
+          <RoleGuard />
           <AccountTypeGuard />
           <Outlet />
         </DownloadPopupProvider>
@@ -178,6 +180,22 @@ function InstalledAppGuard() {
   return null;
 }
 
+/** The same role rules the password wall applies to full page loads, for
+ *  in-app navigation: a visitor (demo password) never reaches the real
+ *  sign-in/sign-up pages or the admin backend, and only visitors reach the
+ *  demo's name screen. */
+function RoleGuard() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  useEffect(() => {
+    const role = getSiteRole();
+    if (!role) return; // no password wall (local dev): nothing to enforce
+    const to = roleRedirectFor(role, pathname);
+    if (to) navigate({ to, replace: true });
+  }, [pathname, navigate]);
+  return null;
+}
+
 /** Account-type check for a session restored when an app opens (or that
  *  reaches the wrong pages): inside an installed app the account must be that
  *  app's type; in a browser tab, Operator pages need an Operator account (a
@@ -191,6 +209,7 @@ function AccountTypeGuard() {
   const navigate = useNavigate();
   const checked = useRef<string | null>(null);
   useEffect(() => {
+    if (isVisitor()) return; // the demo's pretend Operator has no real account
     if (!user) { checked.current = null; return; }
     const app = getInstalledAppKind();
     const required = app ?? (appForPath(pathname) === "operator" ? "operator" : null);

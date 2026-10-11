@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
+import { isVisitor } from "@/lib/site-role";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
 import { useDocuments, DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
@@ -25,6 +26,7 @@ function useOperatorTripNeedingFeedback(operatorId: string | undefined) {
     queryKey: ["trip-requests", "needs-feedback", "operator", operatorId],
     enabled: !!operatorId,
     queryFn: async () => {
+      if (isVisitor()) return null; // demo: no live trips
       const { data, error } = await supabase
         .from("trip_requests")
         .select("id")
@@ -48,6 +50,7 @@ function useOperatorActiveTrip(operatorId: string | undefined) {
     queryKey: ["trip-requests", "active", "operator", operatorId],
     enabled: !!operatorId,
     queryFn: async () => {
+      if (isVisitor()) return null; // demo: no live trips
       const { data, error } = await supabase
         .from("trip_requests")
         .select("id, pickup_stops, dropoff_stops")

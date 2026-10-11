@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { isVisitor, useIsVisitor } from "@/lib/site-role";
+import { getDemoState, updateDemoOnboarding, useDemoState } from "@/lib/demo";
 
 export type OnboardingStatus = "not_started" | "in_progress" | "approved";
 
@@ -68,9 +70,22 @@ export function writeOnboarding(s: OnboardingState) {
   window.dispatchEvent(new Event("solo:onboarding-change"));
 }
 
+/** The wizard's progress. In the visitor demo it lives in memory only
+ *  (lib/demo) — device storage is neither read nor written. */
 export function useOnboarding() {
+  const [stored, update] = useStoredOnboarding();
+  const demo = useDemoState().onboarding;
+  const demoUpdate = (patch: Partial<OnboardingState> | ((s: OnboardingState) => OnboardingState)) => {
+    const cur = getDemoState().onboarding;
+    updateDemoOnboarding(typeof patch === "function" ? patch(cur) : { ...cur, ...patch, data: { ...cur.data, ...(patch.data ?? {}) } });
+  };
+  return useIsVisitor() ? ([demo, demoUpdate] as const) : ([stored, update] as const);
+}
+
+function useStoredOnboarding() {
   const [state, setState] = useState<OnboardingState>(initial);
   useEffect(() => {
+    if (isVisitor()) return;
     setState(readOnboarding());
     const h = () => setState(readOnboarding());
     window.addEventListener("solo:onboarding-change", h);

@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { isVisitor } from "@/lib/site-role";
+import { demoProfile, updateDemoProfile } from "@/lib/demo";
 import { useAuth } from "@/lib/auth";
 
 export type OperatorProfile = {
@@ -28,6 +30,7 @@ export function useOperatorProfile() {
     queryKey: ["operator", user?.id],
     enabled: !!user,
     queryFn: async () => {
+      if (isVisitor()) return demoProfile();
       const { data, error } = await supabase
         .from("operators")
         .select("*")
@@ -63,6 +66,7 @@ export function useUpsertOperator() {
 
   return useMutation({
     mutationFn: async (patch: Partial<Omit<OperatorProfile, "id" | "created_at">>) => {
+      if (isVisitor()) { updateDemoProfile(patch); return demoProfile(); }
       const { data, error } = await supabase
         .from("operators")
         .upsert({ id: user!.id, ...patch })

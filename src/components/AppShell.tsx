@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { DownloadPopup } from "@/components/DownloadPopup";
+import { DemoTag } from "@/components/DemoTag";
+import { useIsVisitor } from "@/lib/site-role";
 
 export function AppShell({
   children,
@@ -29,6 +31,7 @@ export function AppShell({
   const isOperator = pathname.startsWith("/operator");
   const isCustomer = pathname.startsWith("/customer");
   const isHome = pathname === "/";
+  const demo = useIsVisitor() && isOperator;
 
   // On the homepage the active tab follows the section in view: Rider once
   // the Customer section (#rider) reaches the middle of the viewport (so it
@@ -95,7 +98,10 @@ export function AppShell({
               </div>
             </div>
             <div className="leading-tight">
-              <div className="font-display text-lg font-semibold tracking-tight">SOLO<span className="text-gradient">.drive</span></div>
+              <div className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
+                <span>SOLO<span className="text-gradient">.drive</span></span>
+                {demo && <DemoTag />}
+              </div>
               <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Independent Operator</div>
             </div>
           </Link>

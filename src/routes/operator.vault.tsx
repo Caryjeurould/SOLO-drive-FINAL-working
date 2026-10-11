@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useDocuments, useUpsertDocument, REQUIRED_DOC_TYPES, EXPIRING_DOC_TYPES } from "@/hooks/useDocuments";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { isVisitor } from "@/lib/site-role";
 
 export const Route = createFileRoute("/operator/vault")({
   head: () => ({
@@ -26,6 +27,11 @@ function Vault() {
   const docMap = Object.fromEntries(documents.map((d) => [d.document_type, d]));
 
   const handleUpload = async (docTypeId: string, file: File) => {
+    // Demo: nothing is uploaded; the sample document shows as on file.
+    if (isVisitor()) {
+      await upsert.mutateAsync({ document_type: docTypeId });
+      return;
+    }
     const ext = file.name.split(".").pop();
     const path = `${user!.id}/${docTypeId}.${ext}`;
     const { error: upErr } = await supabase.storage

@@ -16,6 +16,8 @@ import { useDocuments, useUploadDocument } from "@/hooks/useDocuments";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { useInstalledAppOnly } from "@/lib/pwa";
+import { isVisitor } from "@/lib/site-role";
+import { useDemoState } from "@/lib/demo";
 
 export const Route = createFileRoute("/operator/onboarding")({
   // The real onboarding form must never be reachable on the public website —
@@ -52,8 +54,15 @@ function OnboardingWizard() {
   const [state, update] = useOnboarding();
   const navigate = useNavigate();
   const [active, setActive] = useState<1 | 2 | 3 | 4>(state.stage);
+  // Visitor demo: the wizard starts from the demo's name screen.
+  const demo = isVisitor();
+  const demoStarted = useDemoState().started;
 
   useEffect(() => { setActive(state.stage); }, [state.stage]);
+  useEffect(() => {
+    if (demo && !demoStarted) navigate({ to: "/operator/demo", replace: true });
+  }, [demo, demoStarted, navigate]);
+  if (demo && !demoStarted) return null;
 
   if (state.status === "approved") {
     return (
@@ -62,7 +71,9 @@ function OnboardingWizard() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-success/15 text-success">
             <CheckCircle2 className="h-7 w-7" />
           </div>
-          <h1 className="mt-4 font-display text-4xl font-semibold">You're approved.</h1>
+          <h1 className="mt-4 font-display text-4xl font-semibold">
+            {demo && state.data.fullName ? `You're approved, ${state.data.fullName}.` : "You're approved."}
+          </h1>
           <p className="mt-3 text-muted-foreground">
             SmartLogix Authorization complete. Your profile, disclosures, and required documents —
             driver's license, business formation, and insurance — have all been submitted.
@@ -372,6 +383,7 @@ function Stage2({ state, update, onDone }: { state: OnboardingState; update: (p:
               body={doc.body}
               expectedName={expectedName}
               signed={signedDocs[doc.id]}
+              prefill={isVisitor()}
               onSign={(sig) => set({ signedDocs: { ...signedDocs, [doc.id]: sig } })}
             />
           ))}
@@ -446,7 +458,7 @@ function Stage3({ state, update, onDone }: { state: OnboardingState; update: (p:
       <div className="mt-6 rounded-2xl border border-border bg-card/60 p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-medium">SOLO.drive Background Check</div>
+            <div className="text-sm font-medium">SOLO.drive Background Check{isVisitor() && " (simulated)"}</div>
             <div className="text-xs text-muted-foreground">Identity, motor vehicle record, and criminal history. Powered by Checkr.</div>
           </div>
           <div className={cn(

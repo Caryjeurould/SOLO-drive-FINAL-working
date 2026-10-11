@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { isVisitor } from "@/lib/site-role";
+import { demoDocuments, setDemoDocument } from "@/lib/demo";
 import { useAuth } from "@/lib/auth";
 
 export type DocumentStatus = "pending" | "verified" | "rejected" | "expired";
@@ -58,6 +60,7 @@ export function useDocuments() {
     queryKey: ["documents", user?.id],
     enabled: !!user,
     queryFn: async () => {
+      if (isVisitor()) return demoDocuments();
       const { data, error } = await supabase
         .from("documents")
         .select("*")
@@ -74,6 +77,10 @@ export function useUpsertDocument() {
 
   return useMutation({
     mutationFn: async (payload: { document_type: string; file_url?: string; status?: DocumentStatus; expiration_date?: string | null }) => {
+      if (isVisitor()) {
+        setDemoDocument(payload.document_type, payload.expiration_date);
+        return demoDocuments().find((d) => d.document_type === payload.document_type)!;
+      }
       const { data, error } = await supabase
         .from("documents")
         .upsert(
@@ -102,6 +109,10 @@ export function useUploadDocument() {
       file,
       expirationDate,
     }: { documentType: string; file: File; expirationDate?: string | null }) => {
+      if (isVisitor()) {
+        setDemoDocument(documentType, expirationDate);
+        return demoDocuments().find((d) => d.document_type === documentType)!;
+      }
       const ext = file.name.split(".").pop();
       const path = `${user!.id}/${documentType}.${ext}`;
       const { error: uploadError } = await supabase.storage

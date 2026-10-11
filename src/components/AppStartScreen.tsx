@@ -2,12 +2,16 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight, Car } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AppKind } from "@/lib/pwa";
+import { useIsVisitor } from "@/lib/site-role";
+import { DemoTag } from "@/components/DemoTag";
 
 /** The start screen each installed app opens to (its manifest start_url):
  *  /operator/start → Start onboarding / Sign in;
- *  /customer/start → Create account / Sign in. */
+ *  /customer/start → Create account / Sign in.
+ *  In the visitor demo, both Operator buttons lead to the demo's name screen. */
 export function AppStartScreen({ kind }: { kind: AppKind }) {
   const operator = kind === "operator";
+  const demo = useIsVisitor() && operator;
   return (
     <div className="min-h-screen bg-background px-4 py-12">
       <div className="absolute inset-0 bg-gradient-hero opacity-40" />
@@ -21,18 +25,19 @@ export function AppStartScreen({ kind }: { kind: AppKind }) {
               SOLO<span className="text-gradient">.drive</span> {operator ? "Operator" : "Customer"}
             </div>
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Independent Operator Platform</div>
+            {demo && <DemoTag className="mt-2" />}
           </div>
         </div>
 
         <div className="mt-8 space-y-3 rounded-3xl border border-border bg-card/80 p-8 shadow-elevated backdrop-blur-2xl">
           <Link
-            to={operator ? "/operator/onboarding" : "/customer/signup"}
+            to={demo ? "/operator/demo" : operator ? "/operator/onboarding" : "/customer/signup"}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-primary px-6 py-4 text-sm font-medium text-primary-foreground shadow-glow hover:opacity-90"
           >
             {operator ? "Start onboarding" : "Create account"} <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            to={operator ? "/operator/login" : "/customer/login"}
+            to={demo ? "/operator/demo" : operator ? "/operator/login" : "/customer/login"}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface/60 px-6 py-4 text-sm font-medium text-foreground hover:bg-surface"
           >
             Sign in
