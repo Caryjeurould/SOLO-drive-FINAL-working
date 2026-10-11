@@ -80,7 +80,8 @@ export default defineEventHandler(async (event) => {
   }
 
   if (event.method === "POST" && path === "/__auth") {
-    const body = await readBody<{ password?: string }>(event);
+    const body = await readBody<{ password?: string; next?: string }>(event);
+    const next = safeNext(body?.next);
     const typed = typeof body?.password === "string" ? body.password : null;
     const token =
       typed !== null && safeEqual(typed, PASSWORD) ? AUTH_TOKEN :
@@ -89,15 +90,24 @@ export default defineEventHandler(async (event) => {
     if (token) {
       setCookie(event, COOKIE_NAME, token, { ...COOKIE_OPTIONS, httpOnly: true });
       setCookie(event, ROLE_COOKIE, token === AUTH_TOKEN ? "admin" : "visitor", COOKIE_OPTIONS);
-      return sendRedirect(event, "/", 302);
+      return sendRedirect(event, next, 302);
     }
-    return html(passwordHtml(true));
+    return html(passwordHtml(true, next));
   }
 
-  return html(passwordHtml(false));
+  return html(passwordHtml(false, path));
 });
 
-function passwordHtml(error: boolean): string {
+/** Where to go after the password: back to the page that asked for it (so an
+ *  installed app opened at its start screen returns there, not to the
+ *  homepage), and only ever a path on this site. */
+function safeNext(next: unknown): string {
+  return typeof next === "string" && /^\/(?![/\\])\S*$/.test(next) && !next.startsWith("/__auth") ? next : "/";
+}
+
+const escapeAttr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function passwordHtml(error: boolean, next: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -198,6 +208,7 @@ function passwordHtml(error: boolean): string {
     <div class="logo">SOLO<span>.drive</span></div>
     <p class="sub">Private preview — enter your access password.</p>
     <form method="POST" action="/__auth">
+      <input type="hidden" name="next" value="${escapeAttr(safeNext(next))}">
       <label for="pw">Password</label>
       <input id="pw" name="password" type="password" autofocus autocomplete="current-password" placeholder="••••••••">
       ${error ? '<p class="error">&#10005; Incorrect password. Please try again.</p>' : ""}
