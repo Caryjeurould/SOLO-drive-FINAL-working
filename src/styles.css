@@ -145,7 +145,7 @@
    seconds. Used on the nav badge's back-arrow chip. */
 @keyframes chip-flash {
   0%, 76%, 100% { transform: scale(1); filter: brightness(1); box-shadow: var(--shadow-glow); }
-  84% { transform: scale(1.45); filter: brightness(1.8); box-shadow: 0 0 16px 6px oklch(0.72 0.20 280 / 80%); }
+  84% { transform: scale(1.3); filter: brightness(1.8); box-shadow: 0 0 6px 2px oklch(0.72 0.20 280 / 80%); }
   92% { transform: scale(1); filter: brightness(1); box-shadow: var(--shadow-glow); }
 }
 .animate-chip-flash { animation: chip-flash 3s ease-in-out infinite; }

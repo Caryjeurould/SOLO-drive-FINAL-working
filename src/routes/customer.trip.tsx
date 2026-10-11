@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { BrandText } from "@/components/BrandText";
 import { MapboxMap } from "@/components/MapboxMap";
 import { PostTripReportPrompt } from "@/components/PostTripReportPrompt";
 import { PanicButton } from "@/components/PanicButton";
@@ -102,7 +103,7 @@ function TripScreen() {
           </div>
 
           <div className="mt-5 space-y-3 text-sm">
-            <Step done label="Booking confirmed" sub="Smart Rate locked at $24.80" />
+            <Step done label="Booking confirmed" sub="Smart+Rate™ locked at $24.80" />
             <Step done label="Operator assigned" sub="Marcus accepted the trip" />
             <Step done={tripCompleted} active={!tripCompleted} label="Driving to pickup" sub={tripCompleted ? "Arrived" : `${eta} min · 0.6 mi away`} />
             <Step done={tripCompleted} active={tripCompleted} label="Arrive at drop-off" sub={tripCompleted ? "Trip complete" : "Midtown East"} />
@@ -149,7 +150,7 @@ function Step({ label, sub, done, active }: { label: string; sub: string; done?:
       </div>
       <div className="flex-1 leading-tight">
         <div className={done ? "text-muted-foreground line-through" : "font-medium"}>{label}</div>
-        <div className="text-xs text-muted-foreground">{sub}</div>
+        <div className="text-xs text-muted-foreground"><BrandText>{sub}</BrandText></div>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import type { RateBreakdown } from "@/lib/smart-rate";
 import { supabase } from "@/lib/supabase";
 import { DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
+import { BrandText } from "@/components/BrandText";
 import {
   MapPin, Navigation, Clock, ShieldCheck, Sparkles, ArrowRight,
   FileText, Star, X, Loader2, CheckCircle2, AlertTriangle, FileSignature, Download, Flag,
@@ -288,7 +289,7 @@ export function SmartRateBooking({
           <div className="mt-5 rounded-2xl border border-primary/30 bg-primary/5 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[10px] uppercase tracking-widest text-primary-glow">Smart Rate · locked</div>
+                <div className="text-[10px] uppercase tracking-widest text-primary-glow"><BrandText>Smart+Rate™ · locked</BrandText></div>
                 <div className="mt-1 font-display text-4xl font-semibold">${rate.total.toFixed(2)}</div>
               </div>
               <div className="text-right text-xs text-muted-foreground">
@@ -388,7 +389,7 @@ export function SmartRateBooking({
 
           <div className="mt-3 rounded-2xl border border-primary/30 bg-primary/5 p-3">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] uppercase tracking-widest text-primary-glow">Smart Rate · locked</div>
+              <div className="text-[10px] uppercase tracking-widest text-primary-glow"><BrandText>Smart+Rate™ · locked</BrandText></div>
               <div className="text-[10px] text-muted-foreground">×{rate.multiplier}</div>
             </div>
             <div className="mt-1 font-display text-3xl font-semibold">${rate.total.toFixed(2)}</div>
@@ -438,7 +439,7 @@ export function SmartRateBooking({
 
   const csaText = `Customer Marie C. and Operator Marcus R. entered into a Contracted Svs Agreement (CSA) for `
     + `transportation/delivery from the marked pick-up, drop-off, and/or delivery location(s) specified in the `
-    + `"Where To" for the agreed upon $${rate.total.toFixed(2)} Smart Rate price.`;
+    + `"Where To" for the agreed upon $${rate.total.toFixed(2)} Smart+Rate™ price.`;
 
   const mapBlock = (
     <div>
@@ -570,7 +571,7 @@ export function SmartRateBooking({
       <div className="mt-5 rounded-2xl border border-primary/30 bg-primary/5 p-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-primary-glow">Smart Rate · locked</div>
+            <div className="text-[10px] uppercase tracking-widest text-primary-glow"><BrandText>Smart+Rate™ · locked</BrandText></div>
             <div className="mt-1 font-display text-4xl font-semibold">${rate.total.toFixed(2)}</div>
           </div>
           <div className="text-right text-xs text-muted-foreground">
@@ -599,7 +600,7 @@ export function SmartRateBooking({
         Confirm ride · ${rate.total.toFixed(2)} <ArrowRight className="h-4 w-4" />
       </button>
       <p className="mt-2 text-center text-[11px] text-muted-foreground">
-        By confirming you accept the locked Smart Rate. No surge surprises.
+        <BrandText>By confirming you accept the locked Smart+Rate™. No surge surprises.</BrandText>
       </p>
 
       {onRequestDownload && (

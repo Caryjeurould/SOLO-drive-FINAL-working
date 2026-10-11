@@ -84,18 +84,17 @@ export function AppShell({
             aria-label={onBack ? "Back" : undefined}
             className="flex items-center gap-2 group"
           >
-            <div className="relative h-9 w-9 shrink-0">
-              <div className="relative h-9 w-9 rounded-xl bg-gradient-primary shadow-glow flex items-center justify-center">
-                <Car className="h-4 w-4 text-primary-foreground" />
-              </div>
-              {/* Back-arrow chip — all the "clickable" attention lives here now:
-                  a brief scale+brightness flash every few seconds, badge stays static. */}
-              <div
-                aria-hidden="true"
-                className="animate-chip-flash pointer-events-none absolute -bottom-1.5 left-1/2 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-gradient-primary ring-2 ring-background"
-              >
-                <ArrowLeft className="h-2.5 w-2.5 text-primary-foreground" strokeWidth={2.5} />
-              </div>
+            {/* Back-arrow chip — all the "clickable" attention lives here now:
+                a brief scale+brightness flash every few seconds, badge stays static.
+                It sits beside the logo, not on it, so the flash never covers it. */}
+            <div
+              aria-hidden="true"
+              className="animate-chip-flash pointer-events-none flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-primary"
+            >
+              <ArrowLeft className="h-3 w-3 text-primary-foreground" strokeWidth={2.5} />
+            </div>
+            <div className="relative h-9 w-9 shrink-0 rounded-xl bg-gradient-primary shadow-glow flex items-center justify-center">
+              <Car className="h-4 w-4 text-primary-foreground" />
             </div>
             <div className="leading-tight">
               <div className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">

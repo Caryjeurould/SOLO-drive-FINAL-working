@@ -43,8 +43,16 @@ export type OnboardingState = {
     commPolicy?: string;
     commInsuranceExpiration?: string;
     profInsuranceExpiration?: string;
-    confirmLiability?: boolean;
-    confirmProfLiability?: boolean;
+    // The two coverage confirmations: each sentence's inputs, and its checkbox
+    // (which only counts once every input in the sentence is filled).
+    bizLiabPolicy?: string;
+    bizLiabLimit?: string;
+    bizLiabCarrier?: string;
+    confirmBizLiability?: boolean;
+    commLiabPolicy?: string;
+    commLiabLimit?: string;
+    commLiabCarrier?: string;
+    confirmCommLiability?: boolean;
     stage4Complete?: boolean;
   };
 };
@@ -128,7 +136,7 @@ export function isValidSSN(s?: string) {
 }
 
 export const LEGAL_DOCS: { id: string; title: string; body: string }[] = [
-  { id: "rules", title: "SOLO.drive Operator Rules", body: "As an independent operator on SOLO.drive, you agree to maintain a clean vehicle, professional conduct, and abide by all federal, state, and local transportation laws. You acknowledge the 50-hour weekly online cap is a hard safety limit and may not be circumvented. You will not discriminate against any passenger for any protected characteristic. You will not operate a vehicle while impaired by any substance. You will accept the Smart Rate fare as quoted, with no off-platform negotiation, and will deliver every booked trip absent a documented safety concern." },
+  { id: "rules", title: "SOLO.drive Operator Rules", body: "As an independent operator on SOLO.drive, you agree to maintain a clean vehicle, professional conduct, and abide by all federal, state, and local transportation laws. You acknowledge the 50-hour weekly online cap is a hard safety limit and may not be circumvented. You will not discriminate against any passenger for any protected characteristic. You will not operate a vehicle while impaired by any substance. You will accept the Smart+Rate™ fare as quoted, with no off-platform negotiation, and will deliver every booked trip absent a documented safety concern." },
   { id: "policies", title: "Platform Policies", body: "SOLO.drive is a technology platform connecting independent operators with customers. SOLO.drive is not your employer, principal, or agent. You are solely responsible for your business operations, tax obligations, vehicle maintenance, and compliance with applicable regulations. You authorize SOLO.drive to display your verified credentials to prospective customers. You agree to keep your Document Vault current; expired insurance or licensure will automatically take you offline." },
   { id: "regulations", title: "Regulatory Acknowledgement", body: "You acknowledge that taxi and for-hire operations are regulated at the city, state, and federal levels. You represent that you hold all licenses, permits, medallions, or TNC authorities required in every jurisdiction in which you operate. You understand that SOLO.drive does not verify regulatory licensure on your behalf and that operating without proper authority is your sole liability." },
   { id: "agreement", title: "Operator Legal Agreement", body: "This Operator Legal Agreement is a binding contract between you and SOLO.drive. You grant SOLO.drive a limited, revocable license to display your business profile, vehicle details, and verified credentials to customers. You retain 100% of fares net of any third-party processing fees. SOLO.drive's compensation is the flat monthly subscription. Either party may terminate this agreement on 30 days notice; SOLO.drive may suspend access immediately for material breach, safety concerns, or regulatory action." },

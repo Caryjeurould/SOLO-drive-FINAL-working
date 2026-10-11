@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
+import { BrandText } from "@/components/BrandText";
 import { OperatorGate } from "@/components/OperatorGate";
 import { appHead } from "@/lib/pwa";
 import { PostTripReportPrompt } from "@/components/PostTripReportPrompt";
@@ -12,7 +13,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
-import { isVisitor } from "@/lib/site-role";
+import { isVisitor, useIsVisitor } from "@/lib/site-role";
+import { DEMO_WORK_WINDOW_HOURS } from "@/lib/demo";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
 import { useDocuments, DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
@@ -112,6 +114,7 @@ function OperatorDashboard() {
     }
   };
 
+  const demo = useIsVisitor();
   const hoursCap = 50;
   const dailyHours = computeDailyHours(weeklyTrips);
   const hoursLogged = dailyHours.reduce((s, h) => s + h, 0);
@@ -284,7 +287,14 @@ function OperatorDashboard() {
           <div className="rounded-3xl border border-border bg-card p-6 shadow-card">
             <div className="flex items-center justify-between">
               <div className="text-xs uppercase tracking-widest text-muted-foreground">Weekly cap</div>
-              <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] text-warning">FMCSA · 50h</span>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                {demo && (
+                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary-glow">
+                    Declared work window · {DEMO_WORK_WINDOW_HOURS}h
+                  </span>
+                )}
+                <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] text-warning">FMCSA · 50h</span>
+              </div>
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="font-display text-5xl font-semibold">{hoursLogged.toFixed(1)}</span>
@@ -336,9 +346,9 @@ function OperatorDashboard() {
               </span>
             </div>
             <div className="mt-4 space-y-2 text-sm">
-              {["Zero per-ride commission", "Smart Rate engine", "Document vault & verification", "Customer trust shield"].map((b) => (
+              {["Zero per-ride commission", "Smart+Rate™ engine", "Document vault & verification", "Customer trust shield"].map((b) => (
                 <div key={b} className="flex items-center gap-2 text-muted-foreground">
-                  <CheckCircle2 className="h-4 w-4 text-success" /> {b}
+                  <CheckCircle2 className="h-4 w-4 text-success" /> <BrandText>{b}</BrandText>
                 </div>
               ))}
             </div>

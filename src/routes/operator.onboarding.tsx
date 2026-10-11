@@ -1,11 +1,12 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ShieldCheck, User, Car, FileSignature, FileSearch, Building2, Lock, Check,
   Plus, X, Upload, ArrowRight, ArrowLeft, AlertTriangle, Sparkles, CheckCircle2,
   Loader2, FileLock2,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { BrandText } from "@/components/BrandText";
 import { LegalDocViewer } from "@/components/onboarding/LegalDocViewer";
 import {
   useOnboarding, isValidVIN, luhn, isValidSSN, isValidEIN, LEGAL_DOCS,
@@ -31,7 +32,7 @@ export const Route = createFileRoute("/operator/onboarding")({
   head: () => ({
     meta: [
       { title: "Operator Authorization — SOLO.drive" },
-      { name: "description", content: "Complete the four-stage SmartLogix Authorization to operate on SOLO.drive." },
+      { name: "description", content: "Complete the four-stage Smart+Logix™ Authorization to operate on SOLO.drive." },
     ],
   }),
   component: InstalledAppOnboarding,
@@ -41,7 +42,7 @@ const STAGES = [
   { n: 1, title: "Identity & Vehicle", icon: User },
   { n: 2, title: "Disclosures & Legal", icon: FileSignature },
   { n: 3, title: "Background Check", icon: FileSearch },
-  { n: 4, title: "Business & Insurance", icon: Building2 },
+  { n: 4, title: "Business Liability & Commercial Insurance", icon: Building2 },
 ] as const;
 
 function InstalledAppOnboarding() {
@@ -64,6 +65,25 @@ function OnboardingWizard() {
   }, [demo, demoStarted, navigate]);
   if (demo && !demoStarted) return null;
 
+  if (state.status === "approved" && demo) {
+    return (
+      <AppShell>
+        <div className="mx-auto max-w-2xl px-4 py-20 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-success/15 text-success">
+            <CheckCircle2 className="h-7 w-7" />
+          </div>
+          <div className="mt-4 text-xs uppercase tracking-[0.3em] text-success">Submitted · Approved by SOLO.drive Admin</div>
+          <h1 className="mt-3 font-display text-4xl font-semibold">{state.data.fullName}</h1>
+          <div className="mt-6 flex justify-center">
+            <Link to="/operator" className="inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-6 py-3.5 text-sm text-primary-foreground shadow-glow">
+              Open dashboard <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
   if (state.status === "approved") {
     return (
       <AppShell>
@@ -72,12 +92,14 @@ function OnboardingWizard() {
             <CheckCircle2 className="h-7 w-7" />
           </div>
           <h1 className="mt-4 font-display text-4xl font-semibold">
-            {demo && state.data.fullName ? `You're approved, ${state.data.fullName}.` : "You're approved."}
+            You're approved.
           </h1>
           <p className="mt-3 text-muted-foreground">
-            SmartLogix Authorization complete. Your profile, disclosures, and required documents —
-            driver's license, business formation, and insurance — have all been submitted.
-            Compliance will verify them before you can go online.
+            <BrandText>
+              Smart+Logix™ Authorization complete. Your profile, disclosures, and required documents —
+              driver's license, business formation, and insurance — have all been submitted.
+              Compliance will verify them before you can go online.
+            </BrandText>
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link to="/operator" className="inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-6 py-3.5 text-sm text-primary-foreground shadow-glow">
@@ -102,9 +124,13 @@ function OnboardingWizard() {
 
   const advance = (from: 1 | 2 | 3 | 4) => {
     const next = (from + 1) as 1 | 2 | 3 | 4;
+    // The demo moves page by page (its Next bar is pinned at the bottom), so
+    // each stage, and the Approved screen, starts at the top.
+    if (demo) window.scrollTo({ top: 0 });
     if (next > 4) {
       update({ status: "approved" });
-      navigate({ to: "/operator" });
+      // The demo shows its Approved screen first (this same page).
+      if (!demo) navigate({ to: "/operator" });
       return;
     }
     update({ stage: next, status: "in_progress" });
@@ -121,11 +147,12 @@ function OnboardingWizard() {
 
   return (
     <AppShell onBack={back}>
-      <div className="mx-auto max-w-5xl px-4 py-10 md:px-8">
+      <div className={cn("mx-auto max-w-5xl px-4 py-10 md:px-8", demo && "pb-28")}>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">SmartLogix Authorization</div>
+            <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground"><BrandText>Smart+Logix™ Authorization</BrandText></div>
             <h1 className="mt-1 font-display text-4xl font-semibold">Become an Operator</h1>
+            <p className="mt-1 text-sm text-primary-glow">SOLO.drive's 4-stage verified onboarding.</p>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">
               Four locked stages. Each one unlocks the next. You cannot accept rides until every stage is approved.
             </p>
@@ -346,6 +373,7 @@ function Stage2({ state, update, onDone }: { state: OnboardingState; update: (p:
           title="Felony convictions"
           rows={felonies}
           none={!!d.feloniesNone}
+          locked={isVisitor()}
           onToggleNone={(v) => set({ feloniesNone: v, felonies: v ? [] : felonies })}
           onAdd={() => addRow("felonies")}
           onUpdate={(i, p) => updateRow("felonies", i, p)}
@@ -355,6 +383,7 @@ function Stage2({ state, update, onDone }: { state: OnboardingState; update: (p:
           title="Misdemeanor convictions"
           rows={misd}
           none={!!d.misdNone}
+          locked={isVisitor()}
           onToggleNone={(v) => set({ misdNone: v, misd: v ? [] : misd })}
           onAdd={() => addRow("misd")}
           onUpdate={(i, p) => updateRow("misd", i, p)}
@@ -383,7 +412,7 @@ function Stage2({ state, update, onDone }: { state: OnboardingState; update: (p:
               body={doc.body}
               expectedName={expectedName}
               signed={signedDocs[doc.id]}
-              prefill={isVisitor()}
+              demo={isVisitor()}
               onSign={(sig) => set({ signedDocs: { ...signedDocs, [doc.id]: sig } })}
             />
           ))}
@@ -398,10 +427,12 @@ function Stage2({ state, update, onDone }: { state: OnboardingState; update: (p:
   );
 }
 
-function DisclosureBlock({ title, rows, none, onToggleNone, onAdd, onUpdate, onRemove }: {
+function DisclosureBlock({ title, rows, none, locked, onToggleNone, onAdd, onUpdate, onRemove }: {
   title: string;
   rows: { offense: string; year: string; jurisdiction: string }[];
   none: boolean;
+  /** Visitor demo: "None to disclose" stays checked. */
+  locked?: boolean;
   onToggleNone: (v: boolean) => void;
   onAdd: () => void;
   onUpdate: (i: number, p: Partial<{ offense: string; year: string; jurisdiction: string }>) => void;
@@ -412,7 +443,7 @@ function DisclosureBlock({ title, rows, none, onToggleNone, onAdd, onUpdate, onR
       <div className="flex items-center justify-between">
         <div className="text-sm font-medium">{title}</div>
         <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-          <input type="checkbox" checked={none} onChange={(e) => onToggleNone(e.target.checked)} className="h-3.5 w-3.5 rounded border-border" />
+          <input type="checkbox" checked={none} disabled={locked} onChange={(e) => onToggleNone(e.target.checked)} className="h-3.5 w-3.5 rounded border-border" />
           None to disclose
         </label>
       </div>
@@ -443,6 +474,8 @@ function Stage3({ state, update, onDone }: { state: OnboardingState; update: (p:
   const d = state.data;
   const status = d.bgStatus ?? "not_started";
   const set = (patch: Partial<OnboardingState["data"]>) => update({ data: patch });
+  // Visitor demo: already Cleared, with the same pinned Next as the other stages.
+  const demo = isVisitor();
 
   useEffect(() => {
     if (status !== "in_progress") return;
@@ -480,7 +513,7 @@ function Stage3({ state, update, onDone }: { state: OnboardingState; update: (p:
           <span className="text-xs text-muted-foreground">one-time, paid to Checkr</span>
         </div>
 
-        <div className="mt-6 flex gap-3">
+        {!demo && <div className="mt-6 flex gap-3">
           {status === "not_started" && (
             <button onClick={() => set({ bgStatus: "in_progress", bgStartedAt: Date.now() })}
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-5 py-3 text-sm text-primary-foreground shadow-glow">
@@ -497,8 +530,9 @@ function Stage3({ state, update, onDone }: { state: OnboardingState; update: (p:
               Continue <ArrowRight className="h-4 w-4" />
             </button>
           )}
-        </div>
+        </div>}
       </div>
+      {demo && <StageFooter valid={status === "cleared"} onContinue={onDone} />}
     </div>
   );
 }
@@ -515,14 +549,17 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
   const declarationsUploaded = !!docMap.insurance?.file_url;
   const profDeclarationsUploaded = !!docMap.professional_insurance?.file_url;
 
+  const bizFilled = !!d.bizLiabPolicy?.trim() && !!d.bizLiabLimit?.trim() && !!d.bizLiabCarrier?.trim();
+  const commFilled = !!d.commLiabPolicy?.trim() && !!d.commLiabLimit?.trim() && !!d.commLiabCarrier?.trim();
+
   const valid = !!d.entityType && !!d.entityName?.trim() && isValidEIN(d.ein) && !!d.formationState && formationUploaded &&
     !!d.commCarrier && !!d.commPolicy && declarationsUploaded && !!d.commInsuranceExpiration &&
     profDeclarationsUploaded && !!d.profInsuranceExpiration &&
-    !!d.confirmLiability && !!d.confirmProfLiability;
+    bizFilled && !!d.confirmBizLiability && commFilled && !!d.confirmCommLiability;
 
   return (
     <div>
-      <StageHeader n={4} title="Business Entity & Commercial Insurance" subtitle="Final step. Operate as a registered business with $1M+$1M coverage." />
+      <StageHeader n={4} title="Business Liability & Commercial Insurance" subtitle="Final step. Operate as a registered business with the required coverage." />
 
       <div className="mt-6">
         <div className="text-sm font-medium">Entity type</div>
@@ -562,7 +599,7 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-xs uppercase tracking-widest text-primary-glow">Required coverage</div>
-            <div className="mt-1 font-display text-xl">$1,000,000 Liability + $1,000,000 Professional Liability</div>
+            <div className="mt-1 font-display text-xl">$1,000,000 Business Liability + your state's Commercial Liability minimum</div>
           </div>
           <ShieldCheck className="h-8 w-8 text-primary-glow" />
         </div>
@@ -603,15 +640,29 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
       )}
 
       <div className="mt-4 space-y-2">
-        <Check2 checked={!!d.confirmLiability} onChange={(v) => set({ confirmLiability: v })}
-          label="I confirm my policy meets or exceeds $1,000,000 in commercial auto liability coverage." />
-        <Check2 checked={!!d.confirmProfLiability} onChange={(v) => set({ confirmProfLiability: v })}
-          label="I confirm I carry $1,000,000 in professional liability coverage." />
+        <CoverageConfirm
+          name="Business Liability"
+          tail="meets the SOLO.drive minimum of $1,000,000."
+          policy={d.bizLiabPolicy ?? ""}
+          limit={d.bizLiabLimit ?? ""}
+          carrier={d.bizLiabCarrier ?? ""}
+          checked={!!d.confirmBizLiability}
+          onChange={(p) => set({ bizLiabPolicy: p.policy, bizLiabLimit: p.limit, bizLiabCarrier: p.carrier, confirmBizLiability: p.checked })}
+        />
+        <CoverageConfirm
+          name="Commercial Liability"
+          tail="meets or exceeds my state's required minimum."
+          policy={d.commLiabPolicy ?? ""}
+          limit={d.commLiabLimit ?? ""}
+          carrier={d.commLiabCarrier ?? ""}
+          checked={!!d.confirmCommLiability}
+          onChange={(p) => set({ commLiabPolicy: p.policy, commLiabLimit: p.limit, commLiabCarrier: p.carrier, confirmCommLiability: p.checked })}
+        />
       </div>
 
       <StageFooter
         valid={valid}
-        labelContinue="Submit for approval"
+        labelContinue={isVisitor() ? undefined : "Submit for approval"}
         onContinue={() => { set({ stage4Complete: true }); onDone(); }}
       />
     </div>
@@ -631,6 +682,7 @@ function StageHeader({ n, title, subtitle }: { n: number; title: string; subtitl
   );
 }
 function StageFooter({ valid, onContinue, labelContinue = "Continue" }: { valid: boolean; onContinue: () => void; labelContinue?: string }) {
+  if (isVisitor()) return <DemoNextBar valid={valid} onNext={onContinue} />;
   return (
     <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
       <Link to="/operator/start" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
@@ -670,12 +722,92 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
     />
   );
 }
-function Check2({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+/** Visitor demo: the stage's Next button, pinned to the bottom of the screen,
+ *  with a quiet "scroll ↓" cue while more of the stage is below. */
+function DemoNextBar({ valid, onNext }: { valid: boolean; onNext: () => void }) {
+  const endRef = useRef<HTMLDivElement>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const end = endRef.current;
+      setMoreBelow(!!end && end.getBoundingClientRect().top > window.innerHeight - 72);
+    };
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    const ro = new ResizeObserver(check);
+    ro.observe(document.body);
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+      ro.disconnect();
+    };
+  }, []);
+
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card/60 p-3 text-sm">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-border" />
-      <span className="text-muted-foreground">{label}</span>
-    </label>
+    <>
+      {/* Marks the end of the stage, for the scroll cue. */}
+      <div ref={endRef} />
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border/60 bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 md:px-8">
+          <span aria-hidden="true" className={cn("text-[11px] text-muted-foreground/70 transition-opacity", moreBelow ? "opacity-100" : "opacity-0")}>
+            scroll ↓
+          </span>
+          <button
+            onClick={onNext}
+            disabled={!valid}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-medium transition",
+              valid ? "bg-gradient-primary text-primary-foreground shadow-glow hover:scale-[1.02]" : "cursor-not-allowed bg-muted text-muted-foreground/60",
+            )}
+          >
+            Next <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** A fixed coverage sentence where only the policy #, limit and carrier can be
+ *  typed in. Its checkbox stays unchecked until all three are filled. */
+function CoverageConfirm({ name, tail, policy, limit, carrier, checked, onChange }: {
+  name: string;
+  tail: string;
+  policy: string;
+  limit: string;
+  carrier: string;
+  checked: boolean;
+  onChange: (p: { policy: string; limit: string; carrier: string; checked: boolean }) => void;
+}) {
+  const filled = !!policy.trim() && !!limit.trim() && !!carrier.trim();
+  const cur = { policy, limit, carrier, checked };
+  const pill = (key: "policy" | "limit" | "carrier", placeholder: string, width: string) => (
+    <input
+      value={cur[key]}
+      onChange={(e) => onChange({ ...cur, [key]: e.target.value })}
+      placeholder={placeholder}
+      aria-label={`${name} ${placeholder}`}
+      className={cn(
+        "mx-0.5 inline-block rounded-lg border border-border bg-input px-2.5 py-1 align-middle text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring",
+        width,
+      )}
+    />
+  );
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-border bg-card/60 p-3 text-sm">
+      <input
+        type="checkbox"
+        aria-label={`I confirm my ${name} policy`}
+        checked={checked && filled}
+        disabled={!filled}
+        onChange={(e) => onChange({ ...cur, checked: e.target.checked })}
+        className="mt-2.5 h-4 w-4 shrink-0 rounded border-border disabled:cursor-not-allowed disabled:opacity-50"
+      />
+      <p className="leading-10 text-muted-foreground">
+        I confirm that my {name} policy: {pill("policy", "Policy #", "w-40")} | {pill("limit", "Limit", "w-28")} {pill("carrier", "Carrier", "w-32")} {tail}
+      </p>
+    </div>
   );
 }
 function DocUploadButton({ label, accept, uploaded, uploading, onPick }: {

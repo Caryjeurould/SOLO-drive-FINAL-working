@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useDownloadPopup } from "@/components/DownloadPopupProvider";
 import { AppShell } from "@/components/AppShell";
+import { BrandText } from "@/components/BrandText";
 import { SmartRateBooking } from "@/components/SmartRateBooking";
 import {
   ArrowRight, ShieldCheck, Gauge, Sparkles, Building2, Truck, FileSignature, DollarSign,
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "SOLO.drive — The Independent Operator Platform" },
-      { name: "description", content: "Run your own taxi or delivery business. Zero commission. Flat monthly fee. Smart Rate AI pricing built in." },
+      { name: "description", content: "Run your own taxi or delivery business. Zero commission. Flat monthly fee. Smart+Rate™ AI pricing built in." },
       { property: "og:title", content: "SOLO.drive — Independent Operator PWA" },
       { property: "og:description", content: "A business-in-a-box for solo drivers. No middleman. No per-ride cuts." },
     ],
@@ -262,8 +263,8 @@ function Landing() {
               size="lg"
               className="min-h-0 pb-6"
               icon={<Sparkles className="h-5 w-5" />}
-              title="Smart-Rate Pricing"
-              body="SOLO.drive's proprietary Smart-Rate Pricing — Distance, fuel index, peak hours, weekends, and special events offer a competitive, non-negotiable price both sides see up front — Operators keep 100%."
+              title="Smart+Rate™ Pricing"
+              body="SOLO.drive's proprietary Smart+Rate™ Pricing — Distance, fuel index, peak hours, weekends, and special events offer a competitive, non-negotiable price both sides see up front — Operators keep 100%."
             />
           </div>
         </div>
@@ -279,14 +280,14 @@ function Landing() {
             <div>
               {/* One line each, as written. Sized to match the Operator hero
                   heading where the column allows it, otherwise the largest size
-                  at which "with Smart-Rate pricing." (~11.2× the font size wide)
+                  at which "with Smart+Rate™ pricing." (~11.2× the font size wide)
                   still fits on one line: phones scale with the screen; sm 48px
                   and md 60px (Operator: 48 / 72); lg
                   42px and xl 54px, limited by the 478px / 612px column. */}
               <h2 className="font-display text-[clamp(1.25rem,calc((100vw-2rem)/11.5),3rem)] font-semibold leading-[1.08] tracking-tight sm:text-5xl md:text-6xl lg:text-[2.625rem] xl:text-[3.375rem]">
                 <span className="block whitespace-nowrap">Ownership Matters.</span>
                 <span className="block whitespace-nowrap text-gradient">Operator owned,</span>
-                <span className="block whitespace-nowrap text-gradient">with Smart-Rate pricing.</span>
+                <span className="block whitespace-nowrap text-gradient">with Smart+Rate™ pricing.</span>
               </h2>
               <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-muted-foreground md:text-base md:leading-[1.65]">
                 SOLO.drive empowers Operators to take ownership of their own transportation &amp; delivery businesses. A Customer who needs transportation or delivery can use the SOLO.drive platform to request service directly from an Operator.
@@ -353,7 +354,7 @@ function Landing() {
             <Pillar
               icon={<DollarSign className="h-5 w-5" />}
               title="Transparent Pricing"
-              body="See your Smart-Rate price with every line item, and agree to it before you book."
+              body="See your Smart+Rate™ price with every line item, and agree to it before you book."
               size="lg"
             />
             <Pillar
@@ -410,10 +411,10 @@ function Pillar({
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary-glow">{icon}</div>
       <h3 className={cn("mt-4 font-display text-xl font-semibold", align === "left" && "self-stretch text-left")}>
-        {title}
+        <BrandText>{title}</BrandText>
       </h3>
       {body && (
-        <p className={cn("mt-2 text-sm text-muted-foreground", align === "left" && "self-stretch text-left")}>{body}</p>
+        <p className={cn("mt-2 text-sm text-muted-foreground", align === "left" && "self-stretch text-left")}><BrandText>{body}</BrandText></p>
       )}
     </div>
   );

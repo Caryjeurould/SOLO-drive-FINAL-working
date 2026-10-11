@@ -8,27 +8,32 @@ export function LegalDocViewer({
   expectedName,
   signed,
   onSign,
-  prefill = false,
+  demo = false,
 }: {
   title: string;
   body: string;
   expectedName: string;
   signed?: { name: string; signature: string; signedAt: string };
   onSign: (sig: { name: string; signature: string; signedAt: string }) => void;
-  /** Visitor demo: the signature box starts filled with the visitor's name,
-   *  so signing is one tap. */
-  prefill?: boolean;
+  /** Visitor demo: the document comes already signed, and the signature line
+   *  shows the visitor's name (name only, no date). */
+  demo?: boolean;
 }) {
-  const [scrolledEnd, setScrolledEnd] = useState(!!signed || prefill);
-  const [sig, setSig] = useState(signed?.signature ?? (prefill ? expectedName : ""));
+  const [scrolledEnd, setScrolledEnd] = useState(!!signed);
+  const [sig, setSig] = useState(signed?.signature ?? "");
   const ref = useRef<HTMLDivElement>(null);
 
   // Short documents don't overflow the box, so there's nothing to scroll and
   // onScroll never fires — without this, signing stays permanently blocked.
+  // Re-checked when the box changes size (e.g. the phone is rotated).
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (el.scrollHeight - el.clientHeight < 16) setScrolledEnd(true);
+    const check = () => { if (el.scrollHeight - el.clientHeight < 16) setScrolledEnd(true); };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [body]);
 
   const onScroll = () => {
@@ -65,6 +70,13 @@ export function LegalDocViewer({
         {body}
       </div>
 
+      {signed && demo && (
+        <div className="mt-3 flex items-baseline gap-2 border-b border-border pb-1.5 text-sm">
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Signed</span>
+          <span className="font-display italic">{expectedName}</span>
+        </div>
+      )}
+
       {!signed && (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
@@ -85,7 +97,7 @@ export function LegalDocViewer({
                 : "cursor-not-allowed bg-muted text-muted-foreground/60",
             )}
           >
-            Sign
+            Read & Sign
           </button>
         </div>
       )}

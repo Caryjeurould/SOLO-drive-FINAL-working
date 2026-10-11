@@ -5,6 +5,7 @@ import {
   ArrowRight, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandText } from "@/components/BrandText";
 import { type AppKind, getInstallPrompt, clearInstallPrompt, onInstallPromptChange } from "@/lib/pwa";
 
 const COPY: Record<AppKind, { name: string; tile: string; signIn: "/login" | "/customer/login"; perks: string[]; installedText: string }> = {
@@ -15,7 +16,7 @@ const COPY: Record<AppKind, { name: string; tile: string; signIn: "/login" | "/c
     perks: [
       "Run your own transportation & delivery business",
       "Zero commission · Flat $499.99 / month",
-      "Transparent Smart Rate pricing",
+      "Transparent Smart+Rate™ pricing",
       "Verified credentials your customers can see",
       "Go Online switch & 50-hour weekly cap",
     ],
@@ -27,7 +28,7 @@ const COPY: Record<AppKind, { name: string; tile: string; signIn: "/login" | "/c
     signIn: "/customer/login",
     perks: [
       "Book rides & deliveries instantly",
-      "Transparent Smart Rate pricing",
+      "Transparent Smart+Rate™ pricing",
       "Verified independent operators",
       "Real-time trip tracking",
       "Zero surge pricing surprises",
@@ -154,7 +155,7 @@ export function InstallAppPage({ kind }: { kind: AppKind }) {
               {c.perks.map((item) => (
                 <div key={item} className="flex items-center gap-2 text-sm">
                   <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                  {item}
+                  <BrandText>{item}</BrandText>
                 </div>
               ))}
             </div>

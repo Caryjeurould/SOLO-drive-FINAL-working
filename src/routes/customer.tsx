@@ -10,7 +10,7 @@ export const Route = createFileRoute("/customer")({
   head: () => ({
     meta: [
       { title: "Book a Ride — SOLO.drive" },
-      { name: "description", content: "Transparent Smart Rate pricing. Verified independent operators. No surprises." },
+      { name: "description", content: "Transparent Smart+Rate™ pricing. Verified independent operators. No surprises." },
       ...appHead("customer").meta,
     ],
     links: appHead("customer").links,

@@ -3,6 +3,7 @@ import { Lock, ArrowRight, Loader2 } from "lucide-react";
 import { useOnboarding } from "@/lib/onboarding";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/AppShell";
+import { BrandText } from "@/components/BrandText";
 
 export function OperatorGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -67,7 +68,7 @@ export function OperatorGate({ children }: { children: React.ReactNode }) {
           Complete onboarding<br /><span className="text-gradient">before you operate.</span>
         </h1>
         <p className="mt-4 max-w-xl text-sm text-muted-foreground md:text-base">
-          The Operator Console is gated behind SmartLogix Authorization. Identity, disclosures, background check, and your business entity must all be approved before you can access your dashboard or accept rides.
+          <BrandText>The Operator Console is gated behind Smart+Logix™ Authorization. Identity, disclosures, background check, and your business entity must all be approved before you can access your dashboard or accept rides.</BrandText>
         </p>
 
         <div className="mt-8 w-full max-w-md">

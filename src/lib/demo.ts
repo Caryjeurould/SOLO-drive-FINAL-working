@@ -4,13 +4,15 @@
 // "solo.onboarding" is left alone). Closing the app ends the demo.
 import { useSyncExternalStore } from "react";
 import type { User } from "@supabase/supabase-js";
-import type { OnboardingState } from "@/lib/onboarding";
+import { LEGAL_DOCS, type OnboardingState } from "@/lib/onboarding";
 import type { OperatorProfile } from "@/hooks/useOperatorProfile";
 import type { OperatorDocument } from "@/hooks/useDocuments";
 import type { Trip } from "@/hooks/useTrips";
 import type { OperatorShift } from "@/hooks/useOperatorShift";
 
 export const DEMO_DEFAULT_NAME = { first: "Demo", last: "Operator" };
+/** The daily work window the demo Operator declared (shown beside the 50-hour weekly cap). */
+export const DEMO_WORK_WINDOW_HOURS = 12;
 const DEMO_ID = "00000000-0000-4000-8000-000000000000";
 
 type DemoState = {
@@ -67,11 +69,14 @@ function samplePhoto(first: string, last: string) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-/** Obviously fake sample answers for every wizard field. Signatures are left
- *  for the visitor to tap (the boxes come prefilled with their name). */
+/** Obviously fake sample answers for every wizard field, with all four stages
+ *  already completed: every document signed with the visitor's name, the
+ *  background check cleared, both coverage confirmations filled in. */
 function sampleOnboardingData(first: string, last: string): OnboardingState["data"] {
+  const name = `${first} ${last}`;
+  const signedAt = new Date().toISOString();
   return {
-    fullName: `${first} ${last}`,
+    fullName: name,
     phone: "(555) 010-0100",
     address: "100 Sample Street, Demo City, NY 00000",
     vehMake: "Toyota",
@@ -84,10 +89,13 @@ function sampleOnboardingData(first: string, last: string): OnboardingState["dat
     debit: "4242 4242 4242 4242",
     photoDataUrl: samplePhoto(first, last),
     licenseExpiration: yearsFromNow(3),
+    stage1Complete: true,
     feloniesNone: true,
     felonies: [],
     misdNone: true,
     misd: [],
+    signedDocs: Object.fromEntries(LEGAL_DOCS.map((doc) => [doc.id, { name, signature: name, signedAt }])),
+    stage2Complete: true,
     bgStatus: "cleared",
     entityType: "LLC",
     entityName: `${last} Transport LLC`,
@@ -97,8 +105,15 @@ function sampleOnboardingData(first: string, last: string): OnboardingState["dat
     commPolicy: "DEMO-COMM-0001",
     commInsuranceExpiration: yearsFromNow(1),
     profInsuranceExpiration: yearsFromNow(1),
-    confirmLiability: true,
-    confirmProfLiability: true,
+    bizLiabPolicy: "T2388-U66-23094",
+    bizLiabLimit: "$1,000,000",
+    bizLiabCarrier: "Farmers",
+    confirmBizLiability: true,
+    commLiabPolicy: "DEMO-AUTO-0001",
+    commLiabLimit: "$1,000,000",
+    commLiabCarrier: "Demo Mutual",
+    confirmCommLiability: true,
+    stage4Complete: true,
   };
 }
 
