@@ -100,8 +100,16 @@ function OnboardingWizard() {
     setActive(next);
   };
 
+  // The header's back chip: previous wizard screen, or out to the app's start
+  // screen from the first one. (Its default target, the homepage, isn't part of
+  // the Operator app, so the installed-app guard used to bounce it.)
+  const back = () => {
+    if (active > 1) setActive((active - 1) as 1 | 2 | 3);
+    else navigate({ to: "/operator/start" });
+  };
+
   return (
-    <AppShell>
+    <AppShell onBack={back}>
       <div className="mx-auto max-w-5xl px-4 py-10 md:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -613,7 +621,7 @@ function StageHeader({ n, title, subtitle }: { n: number; title: string; subtitl
 function StageFooter({ valid, onContinue, labelContinue = "Continue" }: { valid: boolean; onContinue: () => void; labelContinue?: string }) {
   return (
     <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
-      <Link to="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+      <Link to="/operator/start" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-3.5 w-3.5" /> Save & exit
       </Link>
       <button

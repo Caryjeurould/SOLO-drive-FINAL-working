@@ -8,11 +8,15 @@ import { DownloadPopup } from "@/components/DownloadPopup";
 export function AppShell({
   children,
   onDownloadPopupOpen,
+  onBack,
 }: {
   children: React.ReactNode;
   /** Called when the nav opens the Download popup, so a page's idle timer
    *  can treat it as already shown (see useIdleDownloadPopup). */
   onDownloadPopupOpen?: () => void;
+  /** Replaces the logo's go-to-homepage link (the flashing back chip) with a
+   *  page's own back step, e.g. the onboarding wizard inside the Operator app. */
+  onBack?: () => void;
 }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -71,7 +75,12 @@ export function AppShell({
       {showPopup && <DownloadPopup onClose={() => setShowPopup(false)} />}
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8">
-          <Link to="/" className="flex items-center gap-2 group">
+          <Link
+            to="/"
+            onClick={onBack ? (e) => { e.preventDefault(); onBack(); } : undefined}
+            aria-label={onBack ? "Back" : undefined}
+            className="flex items-center gap-2 group"
+          >
             <div className="relative h-9 w-9 shrink-0">
               <div className="relative h-9 w-9 rounded-xl bg-gradient-primary shadow-glow flex items-center justify-center">
                 <Car className="h-4 w-4 text-primary-foreground" />
