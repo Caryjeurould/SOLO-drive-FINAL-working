@@ -1,14 +1,29 @@
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import {
   defineEventHandler,
   getCookie,
   setCookie,
   readBody,
   sendRedirect,
+  setResponseStatus,
   html,
 } from "h3";
 
 const COOKIE_NAME = "solo-auth";
-const PASSWORD = process.env.APP_PASSWORD ?? "SOLOM3$";
+
+// The password comes only from the APP_PASSWORD setting (Vercel). Without it
+// the site fails closed: every request is refused (see below).
+const PASSWORD = process.env.APP_PASSWORD || null;
+
+// The cookie holds an HMAC of a fixed label keyed with the password, so it
+// can't be guessed or forged without the password, and changing the password
+// signs everyone out.
+const AUTH_TOKEN = PASSWORD ? createHmac("sha256", PASSWORD).update("solo-auth:v1").digest("hex") : null;
+
+/** Constant-time string comparison (hashing first makes the lengths equal). */
+function safeEqual(a: string, b: string): boolean {
+  return timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
+}
 
 // /icons/, the two app manifests and /sw.js are the installable-app files:
 // browsers fetch them without the password cookie, and they hold no private
@@ -19,6 +34,11 @@ const EXEMPT_EXACT = new Set(["/favicon.ico", "/favicon.svg", "/robots.txt", "/o
 export default defineEventHandler(async (event) => {
   const path = event.path ?? "/";
 
+  if (!PASSWORD || !AUTH_TOKEN) {
+    setResponseStatus(event, 503);
+    return "Site unavailable.";
+  }
+
   if (
     EXEMPT_EXACT.has(path) ||
     EXEMPT_PREFIXES.some((p) => path.startsWith(p))
@@ -26,12 +46,13 @@ export default defineEventHandler(async (event) => {
     return;
   }
 
-  if (getCookie(event, COOKIE_NAME) === "ok") return;
+  const cookie = getCookie(event, COOKIE_NAME);
+  if (cookie && safeEqual(cookie, AUTH_TOKEN)) return;
 
   if (event.method === "POST" && path === "/__auth") {
     const body = await readBody<{ password?: string }>(event);
-    if (body?.password === PASSWORD) {
-      setCookie(event, COOKIE_NAME, "ok", {
+    if (typeof body?.password === "string" && safeEqual(body.password, PASSWORD)) {
+      setCookie(event, COOKIE_NAME, AUTH_TOKEN, {
         httpOnly: true,
         secure: true,
         maxAge: 60 * 60 * 24 * 30, // 30 days
