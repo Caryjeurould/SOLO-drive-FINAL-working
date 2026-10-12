@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { startOfWeek, differenceInDays, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabase";
 import { isVisitor } from "@/lib/site-role";
-import { demoTrips } from "@/lib/demo";
 import { useAuth } from "@/lib/auth";
 
 export type Trip = {
@@ -24,7 +23,7 @@ export function useWeeklyTrips() {
     queryKey: ["trips", "week", user?.id, weekStart.toISOString()],
     enabled: !!user,
     queryFn: async () => {
-      if (isVisitor()) return demoTrips(); // demo totals come from DEMO_WEEK
+      if (isVisitor()) return [] as Trip[]; // the demo uses DEMO_WEEK / DEMO_JOBS
       const { data, error } = await supabase
         .from("trips")
         .select("*")
@@ -44,7 +43,7 @@ export function useRecentTrips(limit = 5) {
     queryKey: ["trips", "recent", user?.id, limit],
     enabled: !!user,
     queryFn: async () => {
-      if (isVisitor()) return demoTrips().slice(0, limit);
+      if (isVisitor()) return [] as Trip[];
       const { data, error } = await supabase
         .from("trips")
         .select("*")

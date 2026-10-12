@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
-import { DEMO_WEEK, DEMO_WORK_WINDOW_HOURS } from "@/lib/demo";
+import { DEMO_JOBS, DEMO_WEEK, DEMO_WORK_WINDOW_HOURS } from "@/lib/demo";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
 import { useDocuments, DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
@@ -243,7 +243,7 @@ function OperatorDashboard() {
                   "group relative flex h-28 w-28 items-center justify-center rounded-full border transition-all",
                   canGoOnline
                     ? online
-                      ? "border-destructive/40 bg-destructive/10 text-destructive shadow-[0_0_60px_-10px_oklch(0.65_0.22_25/0.7)]"
+                      ? "border-success/40 bg-success/15 text-success shadow-[0_0_60px_-10px_oklch(0.72_0.18_160/0.7)]"
                       : "border-primary/40 bg-gradient-primary text-primary-foreground shadow-glow hover:scale-105"
                     : "cursor-not-allowed border-border bg-muted text-muted-foreground/60",
                 )}
@@ -340,7 +340,12 @@ function OperatorDashboard() {
         <section className={cn("mt-6 grid gap-6", demo ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3")}>
           <KPI icon={<DollarSign className="h-4 w-4" />} label="Earnings this week" value={money(weekEarnings)} />
           <KPI icon={<TrendingUp className="h-4 w-4" />} label="Average fare" value={money(avgFare)} />
-          <KPI icon={<CheckCircle2 className="h-4 w-4" />} label="Trips this week" value={String(tripCount)} />
+          <KPI
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            label="Rides & deliveries this week"
+            value={String(tripCount)}
+            sub={demo ? `${DEMO_WEEK.rides} rides · ${DEMO_WEEK.deliveries} deliveries` : undefined}
+          />
           {demo && (
             <div className="rounded-2xl border border-amber-300/30 bg-amber-300/5 p-5 shadow-card">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-300/15 text-amber-300/80">
@@ -384,10 +389,32 @@ function OperatorDashboard() {
 
           <div className="rounded-3xl border border-border bg-card p-6 shadow-card">
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-xl">Recent trips</h3>
-              <span className="text-xs text-muted-foreground">Last {recentTrips.length}</span>
+              <h3 className="font-display text-xl">{demo ? "Recent rides & deliveries" : "Recent trips"}</h3>
+              <span className="text-xs text-muted-foreground">Last {demo ? DEMO_JOBS.length : recentTrips.length}</span>
             </div>
-            {recentLoading ? (
+            {demo ? (
+              <div data-testid="demo-jobs" className="mt-4 max-h-80 divide-y divide-border overflow-y-auto overscroll-contain scroll-smooth pr-1">
+                {DEMO_JOBS.map((j, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 py-3 text-sm">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[10px]",
+                          j.kind === "Ride" ? "bg-primary/15 text-primary-glow" : "bg-warning/15 text-warning",
+                        )}>
+                          {j.kind}
+                        </span>
+                        <span className="truncate font-medium">{j.from} → {j.to}</span>
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {j.when} · {j.miles.toFixed(1)} mi · {j.minutes} min
+                      </div>
+                    </div>
+                    <div className="font-display text-base">${j.fare.toFixed(2)}</div>
+                  </div>
+                ))}
+              </div>
+            ) : recentLoading ? (
               <div className="flex h-32 items-center justify-center">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
@@ -406,7 +433,6 @@ function OperatorDashboard() {
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {t.distance != null ? `${t.distance.toFixed(1)} mi` : "—"}
-                        {demo && t.duration != null && ` · ${t.duration} min`}
                       </div>
                     </div>
                     <div className="font-display text-base">
@@ -472,13 +498,14 @@ function BillingCycle({ daysPast, daysLeft }: { daysPast: number; daysLeft: numb
   );
 }
 
-function KPI({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function KPI({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
       <div className="flex items-center justify-between">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary-glow">{icon}</div>
       </div>
       <div className="mt-3 font-display text-3xl font-semibold">{value}</div>
+      {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
       <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
     </div>
   );

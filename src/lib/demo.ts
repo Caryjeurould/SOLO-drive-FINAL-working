@@ -7,7 +7,6 @@ import type { User } from "@supabase/supabase-js";
 import { LEGAL_DOCS, type OnboardingState } from "@/lib/onboarding";
 import type { OperatorProfile } from "@/hooks/useOperatorProfile";
 import type { OperatorDocument } from "@/hooks/useDocuments";
-import type { Trip } from "@/hooks/useTrips";
 import type { OperatorShift } from "@/hooks/useOperatorShift";
 
 export const DEMO_DEFAULT_NAME = { first: "Demo", last: "Operator" };
@@ -217,42 +216,133 @@ export function setDemoDocument(documentType: string, expirationDate?: string | 
  *  or time. Five working days, Saturday and Sunday off. [Mon … Sun] */
 export const DEMO_WEEK = {
   dailyHours: [8.0, 9.0, 8.5, 8.0, 9.2, 0, 0],
-  dailyEarnings: [358.4, 431.15, 402.72, 379.84, 433.85, 0, 0],
+  /** Each day's DEMO_JOBS fares added up. */
+  dailyEarnings: [358.33, 430.95, 402.54, 379.76, 434.38, 0, 0],
   earnings: 2005.96,
   avgFare: 20.68,
   trips: 97,
+  rides: 58,
+  deliveries: 39,
   ytd: 82244.36,
   /** Billing cycle: 30 days, 11 past (the due date is counted from today). */
   billingDaysPast: 11,
   billingDaysLeft: 19,
 };
 
-/** Hand-typed recent trips (fare = miles × $2.68, about 15–16 mph including
- *  pickup), each dated hours in the past. */
-export function demoTrips(): Trip[] {
-  const now = Date.now();
-  const samples: [number, string, string, number, number, number][] = [
-    // [hours ago, pickup, dropoff, fare, miles, minutes]
-    [3, "Demo Ave", "Sample Plaza", 18.76, 7.0, 28],
-    [4, "Sample Plaza", "Mock Mall", 14.47, 5.4, 21],
-    [5, "Mock Mall", "Example Park", 23.05, 8.6, 33],
-    [6, "Example Park", "Test Terminal", 39.66, 14.8, 57],
-    [7, "Test Terminal", "Demo Ave", 16.62, 6.2, 24],
-    [27, "Demo Ave", "Placeholder Pier", 24.12, 9.0, 35],
-    [28, "Placeholder Pier", "Sample Plaza", 15.54, 5.8, 22],
-    [29, "Sample Plaza", "Demo Ave", 20.1, 7.5, 29],
-  ];
-  return samples.map(([hoursAgo, pickup, dropoff, fare, distance, duration], i) => ({
-    id: `demo-trip-${i}`,
-    operator_id: DEMO_ID,
-    pickup,
-    dropoff,
-    fare,
-    distance,
-    duration,
-    created_at: new Date(now - hoursAgo * 3600_000).toISOString(),
-  }));
-}
+export type DemoJob = {
+  /** Day and time label only (never a real date, so nothing is in the future). */
+  when: string;
+  kind: "Ride" | "Delivery";
+  from: string;
+  to: string;
+  miles: number;
+  /** miles × $2.68, to the cent */
+  fare: number;
+  minutes: number;
+};
+
+/** The demo week's 97 rides and deliveries, newest first: Monday to Friday,
+ *  6:00 am to 6:00 pm, about 17 mph. Fictional places only. Each day's
+ *  minutes add up to that day's hours; the fares add up to $2,005.96. */
+export const DEMO_JOBS: DemoJob[] = [
+  { when: "Fri 5:05 pm", kind: "Delivery", from: "Mock Pet Supply", to: "Test Meadows", miles: 7.9, fare: 21.17, minutes: 29 },
+  { when: "Fri 4:02 pm", kind: "Ride", from: "Mock Medical Center", to: "Sample Hotel", miles: 15.0, fare: 40.20, minutes: 52 },
+  { when: "Fri 3:41 pm", kind: "Delivery", from: "Demo Deli", to: "Mock Commons", miles: 3.9, fare: 10.45, minutes: 14 },
+  { when: "Fri 3:12 pm", kind: "Ride", from: "Demo Heights", to: "Sample Hotel", miles: 5.8, fare: 15.54, minutes: 20 },
+  { when: "Fri 2:45 pm", kind: "Delivery", from: "Sample Noodle House", to: "Placeholder Lane", miles: 6.9, fare: 18.49, minutes: 25 },
+  { when: "Fri 2:08 pm", kind: "Ride", from: "Sample Hotel", to: "Mock Library", miles: 9.8, fare: 26.26, minutes: 35 },
+  { when: "Fri 1:26 pm", kind: "Ride", from: "Demo Ave", to: "Demo Arena", miles: 9.8, fare: 26.26, minutes: 32 },
+  { when: "Fri 1:02 pm", kind: "Ride", from: "Sample Station", to: "Example College", miles: 6.9, fare: 18.49, minutes: 22 },
+  { when: "Fri 12:34 pm", kind: "Ride", from: "Example Airfield", to: "Test Terminal", miles: 7.9, fare: 21.17, minutes: 25 },
+  { when: "Fri 11:48 am", kind: "Ride", from: "Test Town Square", to: "Mock Mall", miles: 9.8, fare: 26.26, minutes: 35 },
+  { when: "Fri 11:11 am", kind: "Delivery", from: "Demo Deli", to: "Example Row", miles: 7.9, fare: 21.17, minutes: 25 },
+  { when: "Fri 10:40 am", kind: "Delivery", from: "Demo Hardware", to: "Mock Commons", miles: 7.8, fare: 20.90, minutes: 26 },
+  { when: "Fri 10:00 am", kind: "Ride", from: "Test Terminal", to: "Placeholder Pier", miles: 9.8, fare: 26.26, minutes: 33 },
+  { when: "Fri 9:24 am", kind: "Delivery", from: "Example Bakery", to: "Example Row", miles: 7.8, fare: 20.90, minutes: 25 },
+  { when: "Fri 8:54 am", kind: "Ride", from: "Sample Hotel", to: "Placeholder Pier", miles: 5.9, fare: 15.81, minutes: 19 },
+  { when: "Fri 8:19 am", kind: "Ride", from: "Example Airfield", to: "Sample Plaza", miles: 9.5, fare: 25.46, minutes: 31 },
+  { when: "Fri 7:37 am", kind: "Ride", from: "Demo Arena", to: "Example Park", miles: 9.4, fare: 25.19, minutes: 31 },
+  { when: "Fri 7:00 am", kind: "Delivery", from: "Sample Noodle House", to: "Example Hills", miles: 7.8, fare: 20.90, minutes: 27 },
+  { when: "Fri 6:20 am", kind: "Ride", from: "Test Terminal", to: "Sample Station", miles: 9.3, fare: 24.92, minutes: 33 },
+  { when: "Fri 6:01 am", kind: "Delivery", from: "Test Florist", to: "Example Row", miles: 3.2, fare: 8.58, minutes: 13 },
+  { when: "Thu 5:11 pm", kind: "Ride", from: "Test Town Square", to: "Demo Arena", miles: 8.9, fare: 23.85, minutes: 30 },
+  { when: "Thu 4:22 pm", kind: "Ride", from: "Placeholder Pier", to: "Example Airfield", miles: 8.7, fare: 23.32, minutes: 30 },
+  { when: "Thu 3:54 pm", kind: "Ride", from: "Sample Hotel", to: "Mock Library", miles: 6.3, fare: 16.88, minutes: 21 },
+  { when: "Thu 3:06 pm", kind: "Ride", from: "Placeholder Pier", to: "Example Airfield", miles: 9.6, fare: 25.73, minutes: 31 },
+  { when: "Thu 2:22 pm", kind: "Ride", from: "Example Park", to: "Test Terminal", miles: 7.7, fare: 20.64, minutes: 26 },
+  { when: "Thu 2:03 pm", kind: "Delivery", from: "Test Florist", to: "Demo Village", miles: 4.7, fare: 12.60, minutes: 16 },
+  { when: "Thu 1:17 pm", kind: "Delivery", from: "Test Florist", to: "Sample Court", miles: 7.9, fare: 21.17, minutes: 28 },
+  { when: "Thu 12:56 pm", kind: "Delivery", from: "Demo Deli", to: "Example Row", miles: 5.0, fare: 13.40, minutes: 17 },
+  { when: "Thu 12:18 pm", kind: "Ride", from: "Test Town Square", to: "Sample Hotel", miles: 6.9, fare: 18.49, minutes: 22 },
+  { when: "Thu 11:42 am", kind: "Delivery", from: "Demo Hardware", to: "Placeholder Lane", miles: 8.0, fare: 21.44, minutes: 29 },
+  { when: "Thu 11:14 am", kind: "Ride", from: "Sample Plaza", to: "Test Town Square", miles: 6.8, fare: 18.22, minutes: 24 },
+  { when: "Thu 10:24 am", kind: "Ride", from: "Demo Heights", to: "Test Terminal", miles: 9.3, fare: 24.92, minutes: 30 },
+  { when: "Thu 9:34 am", kind: "Ride", from: "Placeholder Pier", to: "Sample Station", miles: 10.0, fare: 26.80, minutes: 35 },
+  { when: "Thu 9:00 am", kind: "Delivery", from: "Demo Hardware", to: "Example Row", miles: 5.7, fare: 15.28, minutes: 18 },
+  { when: "Thu 8:26 am", kind: "Delivery", from: "Mock Pet Supply", to: "Demo Village", miles: 6.7, fare: 17.96, minutes: 23 },
+  { when: "Thu 7:42 am", kind: "Ride", from: "Demo Ave", to: "Placeholder Pier", miles: 9.4, fare: 25.19, minutes: 33 },
+  { when: "Thu 6:54 am", kind: "Delivery", from: "Demo Deli", to: "Sample Court", miles: 10.1, fare: 27.07, minutes: 33 },
+  { when: "Thu 6:05 am", kind: "Ride", from: "Sample Plaza", to: "Placeholder Pier", miles: 10.0, fare: 26.80, minutes: 34 },
+  { when: "Wed 5:04 pm", kind: "Ride", from: "Mock Medical Center", to: "Test Terminal", miles: 8.8, fare: 23.58, minutes: 28 },
+  { when: "Wed 4:26 pm", kind: "Delivery", from: "Demo Deli", to: "Test Meadows", miles: 6.7, fare: 17.96, minutes: 24 },
+  { when: "Wed 3:52 pm", kind: "Ride", from: "Mock Mall", to: "Demo Ave", miles: 9.5, fare: 25.46, minutes: 32 },
+  { when: "Wed 3:25 pm", kind: "Ride", from: "Demo Ave", to: "Demo Arena", miles: 5.2, fare: 13.94, minutes: 19 },
+  { when: "Wed 2:41 pm", kind: "Ride", from: "Demo Heights", to: "Example College", miles: 9.1, fare: 24.39, minutes: 32 },
+  { when: "Wed 2:19 pm", kind: "Delivery", from: "Example Bakery", to: "Demo Village", miles: 3.5, fare: 9.38, minutes: 13 },
+  { when: "Wed 1:48 pm", kind: "Delivery", from: "Sample Noodle House", to: "Demo Gardens", miles: 7.0, fare: 18.76, minutes: 22 },
+  { when: "Wed 1:06 pm", kind: "Ride", from: "Example College", to: "Test Town Square", miles: 10.0, fare: 26.80, minutes: 33 },
+  { when: "Wed 12:29 pm", kind: "Delivery", from: "Placeholder Pizza", to: "Example Row", miles: 7.5, fare: 20.10, minutes: 27 },
+  { when: "Wed 11:34 am", kind: "Ride", from: "Test Town Square", to: "Example College", miles: 12.1, fare: 32.43, minutes: 43 },
+  { when: "Wed 11:07 am", kind: "Ride", from: "Example Airfield", to: "Test Town Square", miles: 7.4, fare: 19.83, minutes: 24 },
+  { when: "Wed 10:34 am", kind: "Delivery", from: "Example Grocer", to: "Demo Gardens", miles: 6.8, fare: 18.22, minutes: 24 },
+  { when: "Wed 9:56 am", kind: "Ride", from: "Demo Arena", to: "Demo Heights", miles: 9.0, fare: 24.12, minutes: 31 },
+  { when: "Wed 9:30 am", kind: "Delivery", from: "Example Grocer", to: "Demo Village", miles: 3.8, fare: 10.18, minutes: 12 },
+  { when: "Wed 8:55 am", kind: "Ride", from: "Demo Ave", to: "Placeholder Pier", miles: 6.7, fare: 17.96, minutes: 22 },
+  { when: "Wed 8:27 am", kind: "Delivery", from: "Placeholder Pizza", to: "Mock Commons", miles: 5.8, fare: 15.54, minutes: 18 },
+  { when: "Wed 7:49 am", kind: "Ride", from: "Sample Station", to: "Example College", miles: 9.5, fare: 25.46, minutes: 31 },
+  { when: "Wed 7:16 am", kind: "Ride", from: "Example Airfield", to: "Mock Mall", miles: 6.7, fare: 17.96, minutes: 22 },
+  { when: "Wed 6:27 am", kind: "Ride", from: "Mock Medical Center", to: "Example College", miles: 10.0, fare: 26.80, minutes: 36 },
+  { when: "Wed 6:02 am", kind: "Delivery", from: "Example Bakery", to: "Mock Commons", miles: 5.1, fare: 13.67, minutes: 17 },
+  { when: "Tue 5:18 pm", kind: "Ride", from: "Example Park", to: "Mock Medical Center", miles: 6.9, fare: 18.49, minutes: 22 },
+  { when: "Tue 4:53 pm", kind: "Delivery", from: "Placeholder Pizza", to: "Demo Village", miles: 5.6, fare: 15.01, minutes: 18 },
+  { when: "Tue 4:16 pm", kind: "Ride", from: "Sample Plaza", to: "Example Airfield", miles: 8.2, fare: 21.98, minutes: 28 },
+  { when: "Tue 3:34 pm", kind: "Ride", from: "Test Town Square", to: "Sample Plaza", miles: 8.5, fare: 22.78, minutes: 31 },
+  { when: "Tue 3:03 pm", kind: "Delivery", from: "Demo Hardware", to: "Demo Gardens", miles: 8.0, fare: 21.44, minutes: 26 },
+  { when: "Tue 2:29 pm", kind: "Ride", from: "Sample Hotel", to: "Example Airfield", miles: 7.1, fare: 19.03, minutes: 23 },
+  { when: "Tue 1:51 pm", kind: "Ride", from: "Mock Medical Center", to: "Test Town Square", miles: 9.8, fare: 26.26, minutes: 34 },
+  { when: "Tue 1:16 pm", kind: "Ride", from: "Example College", to: "Example Airfield", miles: 8.7, fare: 23.32, minutes: 29 },
+  { when: "Tue 12:53 pm", kind: "Delivery", from: "Sample Pharmacy", to: "Sample Terrace", miles: 5.1, fare: 13.67, minutes: 16 },
+  { when: "Tue 12:13 pm", kind: "Ride", from: "Sample Station", to: "Test Town Square", miles: 8.3, fare: 22.24, minutes: 28 },
+  { when: "Tue 11:33 am", kind: "Delivery", from: "Example Grocer", to: "Example Hills", miles: 8.0, fare: 21.44, minutes: 28 },
+  { when: "Tue 11:04 am", kind: "Ride", from: "Sample Hotel", to: "Placeholder Pier", miles: 7.2, fare: 19.30, minutes: 24 },
+  { when: "Tue 10:26 am", kind: "Ride", from: "Mock Medical Center", to: "Test Terminal", miles: 9.4, fare: 25.19, minutes: 30 },
+  { when: "Tue 9:51 am", kind: "Delivery", from: "Example Bakery", to: "Example Hills", miles: 9.6, fare: 25.73, minutes: 31 },
+  { when: "Tue 9:19 am", kind: "Delivery", from: "Demo Hardware", to: "Mock Ridge", miles: 7.6, fare: 20.37, minutes: 24 },
+  { when: "Tue 8:54 am", kind: "Ride", from: "Mock Mall", to: "Mock Library", miles: 6.3, fare: 16.88, minutes: 20 },
+  { when: "Tue 8:18 am", kind: "Ride", from: "Sample Station", to: "Demo Arena", miles: 7.2, fare: 19.30, minutes: 25 },
+  { when: "Tue 7:36 am", kind: "Ride", from: "Mock Medical Center", to: "Example Airfield", miles: 10.0, fare: 26.80, minutes: 36 },
+  { when: "Tue 7:07 am", kind: "Delivery", from: "Placeholder Pizza", to: "Placeholder Lane", miles: 5.8, fare: 15.54, minutes: 21 },
+  { when: "Tue 6:42 am", kind: "Delivery", from: "Mock Pet Supply", to: "Sample Terrace", miles: 5.5, fare: 14.74, minutes: 18 },
+  { when: "Tue 6:05 am", kind: "Delivery", from: "Mock Pet Supply", to: "Example Row", miles: 8.0, fare: 21.44, minutes: 28 },
+  { when: "Mon 4:54 pm", kind: "Ride", from: "Mock Mall", to: "Test Terminal", miles: 9.1, fare: 24.39, minutes: 33 },
+  { when: "Mon 4:15 pm", kind: "Delivery", from: "Demo Deli", to: "Demo Village", miles: 7.6, fare: 20.37, minutes: 27 },
+  { when: "Mon 3:34 pm", kind: "Delivery", from: "Placeholder Pizza", to: "Example Row", miles: 7.4, fare: 19.83, minutes: 29 },
+  { when: "Mon 2:47 pm", kind: "Ride", from: "Placeholder Pier", to: "Example College", miles: 9.4, fare: 25.19, minutes: 33 },
+  { when: "Mon 2:12 pm", kind: "Ride", from: "Demo Ave", to: "Mock Library", miles: 6.7, fare: 17.96, minutes: 24 },
+  { when: "Mon 1:43 pm", kind: "Delivery", from: "Mock Market", to: "Demo Village", miles: 5.1, fare: 13.67, minutes: 18 },
+  { when: "Mon 1:13 pm", kind: "Ride", from: "Test Town Square", to: "Test Terminal", miles: 5.0, fare: 13.40, minutes: 18 },
+  { when: "Mon 12:47 pm", kind: "Delivery", from: "Demo Deli", to: "Example Row", miles: 6.6, fare: 17.69, minutes: 22 },
+  { when: "Mon 12:13 pm", kind: "Delivery", from: "Placeholder Pizza", to: "Sample Terrace", miles: 4.7, fare: 12.60, minutes: 16 },
+  { when: "Mon 11:38 am", kind: "Ride", from: "Placeholder Pier", to: "Example College", miles: 8.2, fare: 21.98, minutes: 27 },
+  { when: "Mon 11:22 am", kind: "Delivery", from: "Demo Deli", to: "Mock Ridge", miles: 3.0, fare: 8.04, minutes: 12 },
+  { when: "Mon 10:49 am", kind: "Ride", from: "Test Town Square", to: "Demo Arena", miles: 6.9, fare: 18.49, minutes: 23 },
+  { when: "Mon 9:59 am", kind: "Ride", from: "Example Airfield", to: "Example Park", miles: 8.5, fare: 22.78, minutes: 33 },
+  { when: "Mon 9:14 am", kind: "Ride", from: "Example College", to: "Demo Ave", miles: 6.9, fare: 18.49, minutes: 27 },
+  { when: "Mon 8:08 am", kind: "Ride", from: "Example Airfield", to: "Sample Hotel", miles: 15.0, fare: 40.20, minutes: 50 },
+  { when: "Mon 7:34 am", kind: "Delivery", from: "Example Grocer", to: "Placeholder Lane", miles: 5.5, fare: 14.74, minutes: 21 },
+  { when: "Mon 6:50 am", kind: "Ride", from: "Test Town Square", to: "Test Terminal", miles: 8.5, fare: 22.78, minutes: 30 },
+  { when: "Mon 6:05 am", kind: "Ride", from: "Mock Library", to: "Sample Plaza", miles: 9.6, fare: 25.73, minutes: 37 },
+];
 
 export function demoShift(): OperatorShift | null {
   return state.shift;
