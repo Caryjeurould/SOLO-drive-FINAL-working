@@ -326,7 +326,7 @@ function OperatorDashboard() {
                     <span className="text-[10px] text-muted-foreground">{d}</span>
                     {demo && (
                       <span className="text-[10px] text-muted-foreground">
-                        {DEMO_WEEK.dailyEarnings[i] ? `$${DEMO_WEEK.dailyEarnings[i]}` : "Off"}
+                        {DEMO_WEEK.dailyEarnings[i] ? `$${Math.round(DEMO_WEEK.dailyEarnings[i])}` : "Off"}
                       </span>
                     )}
                   </div>
@@ -367,8 +367,11 @@ function OperatorDashboard() {
                 {subActive ? "Active" : "Inactive"}
               </span>
             </div>
+            {/* No billing/renewal date exists in the real operator data yet, so
+                the billing cycle bar shows in the demo only. */}
+            {demo && <BillingCycle daysPast={DEMO_WEEK.billingDaysPast} daysLeft={DEMO_WEEK.billingDaysLeft} />}
             <div className="mt-4 space-y-2 text-sm">
-              {["Zero per-ride commission", "Smart+Rate™ engine", "Document vault & verification", "Customer trust shield"].map((b) => (
+              {["Document vault & verification", "Customer trust shield"].map((b) => (
                 <div key={b} className="flex items-center gap-2 text-muted-foreground">
                   <CheckCircle2 className="h-4 w-4 text-success" /> <BrandText>{b}</BrandText>
                 </div>
@@ -441,6 +444,30 @@ function Guardrail({ ok, icon, label, value }: { ok: boolean; icon: React.ReactN
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
         <div className="text-sm font-medium">{value}</div>
       </div>
+    </div>
+  );
+}
+
+/** The 30-day billing cycle as a "peppermint stick": days past are candy
+ *  striped, days left are empty. The due date counts forward from today. */
+function BillingCycle({ daysPast, daysLeft }: { daysPast: number; daysLeft: number }) {
+  const due = new Date();
+  due.setDate(due.getDate() + daysLeft);
+  const dueText = due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return (
+    <div className="mt-5" data-testid="billing-cycle">
+      <div className="text-xs uppercase tracking-widest text-muted-foreground">Billing cycle</div>
+      <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full border border-border bg-muted">
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${(daysPast / (daysPast + daysLeft)) * 100}%`,
+            background: "repeating-linear-gradient(-45deg, var(--primary) 0 6px, oklch(0.95 0.03 290) 6px 12px)",
+          }}
+        />
+      </div>
+      <div className="mt-1.5 text-xs text-muted-foreground">{daysPast} days past · {daysLeft} days left</div>
+      <div className="text-xs text-muted-foreground">Next access fee $499.99 due {dueText}</div>
     </div>
   );
 }

@@ -110,7 +110,7 @@ function sampleOnboardingData(first: string, last: string): OnboardingState["dat
     bizLiabCarrier: "Farmers",
     confirmBizLiability: true,
     commLiabPolicy: "DEMO-AUTO-0001",
-    commLiabLimit: "$1,000,000",
+    commLiabLimit: "75/100/50",
     commLiabCarrier: "Demo Mutual",
     confirmCommLiability: true,
     stage4Complete: true,
@@ -217,11 +217,14 @@ export function setDemoDocument(documentType: string, expirationDate?: string | 
  *  or time. Five working days, Saturday and Sunday off. [Mon … Sun] */
 export const DEMO_WEEK = {
   dailyHours: [8.0, 9.0, 8.5, 8.0, 9.2, 0, 0],
-  dailyEarnings: [360, 430, 400, 380, 430, 0, 0],
-  earnings: 2000,
-  avgFare: 20,
+  dailyEarnings: [358.4, 431.15, 402.72, 379.84, 433.85, 0, 0],
+  earnings: 2005.96,
+  avgFare: 20.06,
   trips: 100,
-  ytd: 82000,
+  ytd: 82244.36,
+  /** Billing cycle: 30 days, 11 past (the due date is counted from today). */
+  billingDaysPast: 11,
+  billingDaysLeft: 19,
 };
 
 /** Hand-typed recent trips (fare = miles × $2.68, about 15–16 mph including

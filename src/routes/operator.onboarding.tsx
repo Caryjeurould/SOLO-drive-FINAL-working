@@ -640,7 +640,10 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
           onChange={(p) => set({ bizLiabPolicy: p.policy, bizLiabLimit: p.limit, bizLiabCarrier: p.carrier, confirmBizLiability: p.checked })}
         />
         <CoverageConfirm
-          name="Commercial Liability"
+          name="Commercial Insurance"
+          note="Commercially rated coverage for the vehicle you operate."
+          limitPlaceholder="Limits"
+          limitHint="in $1,000s: bodily injury per person / per accident / property damage"
           tail="meets or exceeds my state's required minimum."
           policy={d.commLiabPolicy ?? ""}
           limit={d.commLiabLimit ?? ""}
@@ -761,8 +764,13 @@ function DemoNextBar({ valid, onNext }: { valid: boolean; onNext: () => void }) 
 
 /** A fixed coverage sentence where only the policy #, limit and carrier can be
  *  typed in. Its checkbox stays unchecked until all three are filled. */
-function CoverageConfirm({ name, tail, policy, limit, carrier, checked, onChange }: {
+function CoverageConfirm({ name, note, limitPlaceholder = "Limit", limitHint, tail, policy, limit, carrier, checked, onChange }: {
   name: string;
+  /** Small gray line under the coverage name. */
+  note?: string;
+  limitPlaceholder?: string;
+  /** Small gray hint under the limits box. */
+  limitHint?: string;
   tail: string;
   policy: string;
   limit: string;
@@ -795,7 +803,16 @@ function CoverageConfirm({ name, tail, policy, limit, carrier, checked, onChange
         className="mt-2.5 h-4 w-4 shrink-0 rounded border-border disabled:cursor-not-allowed disabled:opacity-50"
       />
       <p className="leading-10 text-muted-foreground">
-        I confirm that my {name} policy: {pill("policy", "Policy #", "w-40")} | {pill("limit", "Limit", "w-28")} {pill("carrier", "Carrier", "w-32")} {tail}
+        I confirm that my {name} policy:{" "}
+        {note && <span className="block text-xs leading-5 text-muted-foreground/80">{note}</span>}
+        {pill("policy", "Policy #", "w-40")} |{" "}
+        {limitHint ? (
+          <span className="inline-flex flex-col align-top">
+            {pill("limit", limitPlaceholder, "w-28")}
+            <span className="mx-0.5 -mt-1.5 max-w-[14rem] text-[10px] leading-4 text-muted-foreground/80">{limitHint}</span>
+          </span>
+        ) : pill("limit", limitPlaceholder, "w-28")}{" "}
+        {pill("carrier", "Carrier", "w-32")} {tail}
       </p>
     </div>
   );
