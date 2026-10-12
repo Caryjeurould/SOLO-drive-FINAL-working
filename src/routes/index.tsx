@@ -79,8 +79,13 @@ function Landing() {
   const operatorLabel = onb.status === "approved" ? "Operator Dashboard" : onb.status === "in_progress" ? "Resume Onboarding" : "Become an Operator";
 
   const isLight = heroVariant === "light";
-  const now = new Date();
-  const dashboardHeader = `${now.toLocaleDateString("en-US", { weekday: "long" })} · ${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${now.getFullYear()} · Dashboard`;
+  // The visitor's own day and date, filled in by the browser (the server's
+  // date can differ, which made the page's HTML not match).
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => setNow(new Date()), []);
+  const dashboardHeader = now
+    ? `${now.toLocaleDateString("en-US", { weekday: "long" })} · ${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${now.getFullYear()} · Dashboard`
+    : "Dashboard";
   const hoursThisWeek = 42.7;
   const hoursCap = 50;
 

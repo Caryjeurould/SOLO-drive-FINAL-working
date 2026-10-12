@@ -213,32 +213,40 @@ export function setDemoDocument(documentType: string, expirationDate?: string | 
   });
 }
 
-/** Sample trips spread over the current week (Monday start), up to now. */
+/** Sample trips over the last 7 days, counted back from now, so the demo
+ *  dashboard always has trips, hours and a weekly total, whatever the day or
+ *  time. Each trip started (and finished) at least 3 hours ago. */
 export function demoTrips(): Trip[] {
-  const now = new Date();
-  const monday = new Date(now);
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  const samples: [number, number, string, string, number, number, number][] = [
-    // [day, hour, pickup, dropoff, fare, miles, minutes]
-    [0, 8, "Demo Ave", "Sample Plaza", 24.5, 6.2, 95],
-    [0, 15, "Test Terminal", "Demo Ave", 41.0, 12.8, 130],
-    [1, 9, "Sample Plaza", "Mock Mall", 18.75, 4.1, 80],
-    [1, 17, "Mock Mall", "Example Park", 33.2, 9.6, 115],
-    [2, 7, "Example Park", "Test Terminal", 63.9, 21.4, 150],
-    [3, 12, "Demo Ave", "Placeholder Pier", 27.4, 7.7, 100],
-    [4, 10, "Placeholder Pier", "Sample Plaza", 22.1, 5.5, 90],
-    [5, 14, "Sample Plaza", "Demo Ave", 45.6, 14.3, 140],
+  const now = Date.now();
+  const samples: [number, string, string, number, number, number][] = [
+    // [hours ago, pickup, dropoff, fare, miles, minutes]
+    [3, "Demo Ave", "Sample Plaza", 24.5, 6.2, 95],
+    [20, "Test Terminal", "Demo Ave", 41.0, 12.8, 130],
+    [30, "Sample Plaza", "Mock Mall", 18.75, 4.1, 80],
+    [50, "Mock Mall", "Example Park", 33.2, 9.6, 115],
+    [74, "Example Park", "Test Terminal", 63.9, 21.4, 150],
+    [98, "Demo Ave", "Placeholder Pier", 27.4, 7.7, 100],
+    [122, "Placeholder Pier", "Sample Plaza", 22.1, 5.5, 90],
+    [146, "Sample Plaza", "Demo Ave", 45.6, 14.3, 140],
   ];
-  return samples
-    .map(([day, hour, pickup, dropoff, fare, distance, duration], i) => {
-      const at = new Date(monday);
-      at.setDate(monday.getDate() + day);
-      at.setHours(hour);
-      return { id: `demo-trip-${i}`, operator_id: DEMO_ID, pickup, dropoff, fare, distance, duration, created_at: at.toISOString() };
-    })
-    .filter((t) => new Date(t.created_at) <= now)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return samples.map(([hoursAgo, pickup, dropoff, fare, distance, duration], i) => ({
+    id: `demo-trip-${i}`,
+    operator_id: DEMO_ID,
+    pickup,
+    dropoff,
+    fare,
+    distance,
+    duration,
+    created_at: new Date(now - hoursAgo * 3600_000).toISOString(),
+  }));
+}
+
+/** The demo's daily hours for the M–S bars: the last 7 days are seven
+ *  different weekdays, so each trip counts toward its own weekday. */
+export function demoDailyHours(trips: Trip[]): number[] {
+  const daily = [0, 0, 0, 0, 0, 0, 0];
+  for (const t of trips) daily[(new Date(t.created_at).getDay() + 6) % 7] += (t.duration ?? 0) / 60;
+  return daily;
 }
 
 export function demoShift(): OperatorShift | null {

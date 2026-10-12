@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { startOfWeek, differenceInDays, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabase";
 import { isVisitor } from "@/lib/site-role";
-import { demoTrips } from "@/lib/demo";
+import { demoDailyHours, demoTrips } from "@/lib/demo";
 import { useAuth } from "@/lib/auth";
 
 export type Trip = {
@@ -24,7 +24,7 @@ export function useWeeklyTrips() {
     queryKey: ["trips", "week", user?.id, weekStart.toISOString()],
     enabled: !!user,
     queryFn: async () => {
-      if (isVisitor()) return demoTrips().filter((t) => t.created_at >= weekStart.toISOString());
+      if (isVisitor()) return demoTrips(); // demo: the last 7 days
       const { data, error } = await supabase
         .from("trips")
         .select("*")
@@ -59,6 +59,7 @@ export function useRecentTrips(limit = 5) {
 
 /** Returns [Mon, Tue, Wed, Thu, Fri, Sat, Sun] hours from weekly trips */
 export function computeDailyHours(trips: Trip[]): number[] {
+  if (isVisitor()) return demoDailyHours(trips);
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const daily = [0, 0, 0, 0, 0, 0, 0];
   for (const t of trips) {

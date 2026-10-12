@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  ShieldCheck, User, Car, FileSignature, FileSearch, Building2, Lock, Check,
+  User, Car, FileSignature, FileSearch, Building2, Lock, Check,
   Plus, X, Upload, ArrowRight, ArrowLeft, AlertTriangle, Sparkles, CheckCircle2,
   Loader2, FileLock2,
 } from "lucide-react";
@@ -595,17 +595,7 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
         </Field>
       </div>
 
-      <div className="mt-8 rounded-2xl border border-primary/30 bg-primary/5 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-xs uppercase tracking-widest text-primary-glow">Required coverage</div>
-            <div className="mt-1 font-display text-xl">$1,000,000 Business Liability + your state's Commercial Liability minimum</div>
-          </div>
-          <ShieldCheck className="h-8 w-8 text-primary-glow" />
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
         <Field label="Commercial auto carrier"><Input value={d.commCarrier ?? ""} onChange={(v) => set({ commCarrier: v })} placeholder="Progressive Commercial" /></Field>
         <Field label="Commercial policy #"><Input value={d.commPolicy ?? ""} onChange={(v) => set({ commPolicy: v })} placeholder="C-XXXXXXXX" /></Field>
         <Field label="Commercial auto expiration date" hint="Matches what's printed on the declarations page.">
