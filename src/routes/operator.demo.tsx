@@ -51,9 +51,9 @@ function DemoNameScreen() {
           className="mt-8 space-y-4 rounded-3xl border border-border bg-card/80 p-8 shadow-elevated backdrop-blur-2xl"
         >
           <div>
-            <h1 className="font-display text-xl font-semibold">Your first and last name</h1>
+            <h1 className="font-display text-xl font-semibold">Enter your first and last name</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Used throughout this demo. Everything else is sample data, and nothing is saved.
+              to personalize the demo. Sample data only and nothing is saved or stored.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -78,7 +78,7 @@ function DemoNameScreen() {
             type="submit"
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-primary px-6 py-4 text-sm font-medium text-primary-foreground shadow-glow hover:opacity-90"
           >
-            Start the demo <ArrowRight className="h-4 w-4" />
+            Start Demo <ArrowRight className="h-4 w-4" />
           </button>
           <button
             type="button"

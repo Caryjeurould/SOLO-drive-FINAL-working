@@ -213,21 +213,31 @@ export function setDemoDocument(documentType: string, expirationDate?: string | 
   });
 }
 
-/** Sample trips over the last 7 days, counted back from now, so the demo
- *  dashboard always has trips, hours and a weekly total, whatever the day or
- *  time. Each trip started (and finished) at least 3 hours ago. */
+/** The demo dashboard's week: fixed, hand-typed numbers, the same at any day
+ *  or time. Five working days, Saturday and Sunday off. [Mon … Sun] */
+export const DEMO_WEEK = {
+  dailyHours: [8.0, 9.0, 8.5, 8.0, 9.2, 0, 0],
+  dailyEarnings: [360, 430, 400, 380, 430, 0, 0],
+  earnings: 2000,
+  avgFare: 20,
+  trips: 100,
+  ytd: 82000,
+};
+
+/** Hand-typed recent trips (fare = miles × $2.68, about 15–16 mph including
+ *  pickup), each dated hours in the past. */
 export function demoTrips(): Trip[] {
   const now = Date.now();
   const samples: [number, string, string, number, number, number][] = [
     // [hours ago, pickup, dropoff, fare, miles, minutes]
-    [3, "Demo Ave", "Sample Plaza", 24.5, 6.2, 95],
-    [20, "Test Terminal", "Demo Ave", 41.0, 12.8, 130],
-    [30, "Sample Plaza", "Mock Mall", 18.75, 4.1, 80],
-    [50, "Mock Mall", "Example Park", 33.2, 9.6, 115],
-    [74, "Example Park", "Test Terminal", 63.9, 21.4, 150],
-    [98, "Demo Ave", "Placeholder Pier", 27.4, 7.7, 100],
-    [122, "Placeholder Pier", "Sample Plaza", 22.1, 5.5, 90],
-    [146, "Sample Plaza", "Demo Ave", 45.6, 14.3, 140],
+    [3, "Demo Ave", "Sample Plaza", 18.76, 7.0, 28],
+    [4, "Sample Plaza", "Mock Mall", 14.47, 5.4, 21],
+    [5, "Mock Mall", "Example Park", 23.05, 8.6, 33],
+    [6, "Example Park", "Test Terminal", 39.66, 14.8, 57],
+    [7, "Test Terminal", "Demo Ave", 16.62, 6.2, 24],
+    [27, "Demo Ave", "Placeholder Pier", 24.12, 9.0, 35],
+    [28, "Placeholder Pier", "Sample Plaza", 15.54, 5.8, 22],
+    [29, "Sample Plaza", "Demo Ave", 20.1, 7.5, 29],
   ];
   return samples.map(([hoursAgo, pickup, dropoff, fare, distance, duration], i) => ({
     id: `demo-trip-${i}`,
@@ -239,14 +249,6 @@ export function demoTrips(): Trip[] {
     duration,
     created_at: new Date(now - hoursAgo * 3600_000).toISOString(),
   }));
-}
-
-/** The demo's daily hours for the M–S bars: the last 7 days are seven
- *  different weekdays, so each trip counts toward its own weekday. */
-export function demoDailyHours(trips: Trip[]): number[] {
-  const daily = [0, 0, 0, 0, 0, 0, 0];
-  for (const t of trips) daily[(new Date(t.created_at).getDay() + 6) % 7] += (t.duration ?? 0) / 60;
-  return daily;
 }
 
 export function demoShift(): OperatorShift | null {

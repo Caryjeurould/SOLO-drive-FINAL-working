@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
-import { DEMO_WORK_WINDOW_HOURS } from "@/lib/demo";
+import { DEMO_WEEK, DEMO_WORK_WINDOW_HOURS } from "@/lib/demo";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
 import { useDocuments, DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
@@ -116,7 +116,7 @@ function OperatorDashboard() {
 
   const demo = useIsVisitor();
   const hoursCap = 50;
-  const dailyHours = computeDailyHours(weeklyTrips);
+  const dailyHours = demo ? DEMO_WEEK.dailyHours : computeDailyHours(weeklyTrips);
   const hoursLogged = dailyHours.reduce((s, h) => s + h, 0);
   const hoursLeft = hoursCap - hoursLogged;
   const subActive = operator?.subscription_active ?? false;
@@ -127,7 +127,11 @@ function OperatorDashboard() {
   const accountActive = (operator?.status ?? "active") === "active";
   const canGoOnline = accountActive && subActive && hoursLeft > 0 && docsVerified === docsTotal;
 
-  const { total: weekEarnings, avg: avgFare, count: tripCount } = computeWeeklyEarnings(weeklyTrips);
+  const { total: weekEarnings, avg: avgFare, count: tripCount } = demo
+    ? { total: DEMO_WEEK.earnings, avg: DEMO_WEEK.avgFare, count: DEMO_WEEK.trips }
+    : computeWeeklyEarnings(weeklyTrips);
+  const money = (n: number) =>
+    demo ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${n.toFixed(2)}`;
 
   const displayName = operator?.name
     ? operator.name.split(" ")[0]
@@ -153,6 +157,7 @@ function OperatorDashboard() {
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Operator Console</div>
             <h1 className="mt-1 font-display text-4xl font-semibold">{greeting}, {displayName}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Your business. Your hours. Your income.</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {subActive ? "Subscription active · Flat monthly rate" : "Subscription inactive"}
             </p>
@@ -286,7 +291,7 @@ function OperatorDashboard() {
           {/* Hours meter */}
           <div className="rounded-3xl border border-border bg-card p-6 shadow-card">
             <div className="flex items-center justify-between">
-              <div className="text-xs uppercase tracking-widest text-muted-foreground">Weekly cap</div>
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">Hours online this week</div>
               <div className="flex flex-wrap justify-end gap-1.5">
                 {demo && (
                   <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary-glow">
@@ -298,7 +303,7 @@ function OperatorDashboard() {
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="font-display text-5xl font-semibold">{hoursLogged.toFixed(1)}</span>
-              <span className="text-sm text-muted-foreground">/ {hoursCap}h online</span>
+              <span className="text-sm text-muted-foreground">/ {hoursCap}h</span>
             </div>
             <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-muted">
               <div
@@ -306,16 +311,24 @@ function OperatorDashboard() {
                 style={{ width: `${Math.min((hoursLogged / hoursCap) * 100, 100)}%` }}
               />
             </div>
-            <div className="mt-5 grid grid-cols-7 gap-1.5">
+            <div className="mt-1.5 text-xs text-muted-foreground">
+              {Math.max(0, hoursLeft).toFixed(1)}h remaining before weekly cap
+            </div>
+            <div className="mt-5 text-xs text-muted-foreground">Hours by day (10h max)</div>
+            <div className="mt-2 grid grid-cols-7 gap-1.5">
               {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => {
                 const h = dailyHours[i];
-                const maxH = Math.max(...dailyHours, 1);
                 return (
                   <div key={i} className="flex flex-col items-center gap-1.5">
                     <div className="flex h-20 w-full items-end overflow-hidden rounded-md bg-muted">
-                      <div className="w-full bg-gradient-primary" style={{ height: `${(h / maxH) * 100}%` }} />
+                      <div className="w-full bg-gradient-primary" style={{ height: `${Math.min(h / 10, 1) * 100}%` }} />
                     </div>
                     <span className="text-[10px] text-muted-foreground">{d}</span>
+                    {demo && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {DEMO_WEEK.dailyEarnings[i] ? `$${DEMO_WEEK.dailyEarnings[i]}` : "Off"}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -324,10 +337,19 @@ function OperatorDashboard() {
         </section>
 
         {/* Earnings */}
-        <section className="mt-6 grid gap-6 md:grid-cols-3">
-          <KPI icon={<DollarSign className="h-4 w-4" />} label="This week" value={`$${weekEarnings.toFixed(2)}`} />
-          <KPI icon={<TrendingUp className="h-4 w-4" />} label="Avg fare" value={`$${avgFare.toFixed(2)}`} />
-          <KPI icon={<CheckCircle2 className="h-4 w-4" />} label="Trips" value={String(tripCount)} />
+        <section className={cn("mt-6 grid gap-6", demo ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3")}>
+          <KPI icon={<DollarSign className="h-4 w-4" />} label="Earnings this week" value={money(weekEarnings)} />
+          <KPI icon={<TrendingUp className="h-4 w-4" />} label="Average fare" value={money(avgFare)} />
+          <KPI icon={<CheckCircle2 className="h-4 w-4" />} label="Trips this week" value={String(tripCount)} />
+          {demo && (
+            <div className="rounded-2xl border border-amber-300/30 bg-amber-300/5 p-5 shadow-card">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-300/15 text-amber-300/80">
+                <CalendarCheck className="h-4 w-4" />
+              </div>
+              <div className="mt-3 font-display text-3xl font-semibold text-amber-300/80">{money(DEMO_WEEK.ytd)}</div>
+              <div className="text-xs uppercase tracking-widest text-amber-300/60">Year to date</div>
+            </div>
+          )}
         </section>
 
         {/* Subscription block + recent trips */}
@@ -381,6 +403,7 @@ function OperatorDashboard() {
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {t.distance != null ? `${t.distance.toFixed(1)} mi` : "—"}
+                        {demo && t.duration != null && ` · ${t.duration} min`}
                       </div>
                     </div>
                     <div className="font-display text-base">
