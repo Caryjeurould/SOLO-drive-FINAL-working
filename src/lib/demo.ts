@@ -219,8 +219,8 @@ export const DEMO_WEEK = {
   dailyHours: [8.0, 9.0, 8.5, 8.0, 9.2, 0, 0],
   dailyEarnings: [358.4, 431.15, 402.72, 379.84, 433.85, 0, 0],
   earnings: 2005.96,
-  avgFare: 20.06,
-  trips: 100,
+  avgFare: 20.68,
+  trips: 97,
   ytd: 82244.36,
   /** Billing cycle: 30 days, 11 past (the due date is counted from today). */
   billingDaysPast: 11,

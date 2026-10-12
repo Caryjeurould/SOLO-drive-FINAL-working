@@ -187,11 +187,11 @@ function Landing() {
                 </div>
 
                 <div className="mt-4 flex items-center justify-between">
-                  <span className={cn("text-sm font-semibold", isLight ? "text-neutral-900" : "text-foreground")}>$2,000.00</span>
+                  <span className={cn("text-sm font-semibold", isLight ? "text-neutral-900" : "text-foreground")}>$2,005.96</span>
                   <span className={isLight ? "text-xs text-neutral-500" : "text-xs text-muted-foreground"}>this week</span>
                 </div>
                 <div className="mt-1 flex items-center justify-between">
-                  <span className={cn("text-sm font-semibold", isLight ? "text-amber-600/80" : "text-amber-300/80")}>$82,000.00</span>
+                  <span className={cn("text-sm font-semibold", isLight ? "text-amber-600/80" : "text-amber-300/80")}>$82,244.36</span>
                   <span className={isLight ? "text-xs text-neutral-500" : "text-xs text-muted-foreground"}>YTD earnings</span>
                 </div>
 

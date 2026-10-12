@@ -163,7 +163,9 @@ export function AppShell({
       <footer className="border-t border-border/60 mt-auto">
         <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Zero commission</span>
+            {pathname !== "/operator" && (
+              <span className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Zero commission</span>
+            )}
             <span className="flex items-center gap-1.5"><FileLock2 className="h-3.5 w-3.5" /> Verified operators</span>
           </div>
           <div>© SOLO.drive — Built for independent operators.</div>
