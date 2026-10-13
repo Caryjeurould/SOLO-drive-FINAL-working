@@ -14,6 +14,41 @@ export const DEMO_DEFAULT_NAME = { first: "Demo", last: "Operator" };
 export const DEMO_WORK_WINDOW_HOURS = 12;
 const DEMO_ID = "00000000-0000-4000-8000-000000000000";
 
+/** The sample Operator documents (images in public/demo/, plus a Business
+ *  Liability card drawn in code). The documents always show this fixed
+ *  person; the visitor's typed name still appears in agreements and pop-ups.
+ *  Every prefilled vehicle / policy field in the demo reads from here. */
+export const DEMO_DOCS = {
+  name: "Marcus Paul Roberts",
+  address: "1575 Montana Ave, Phoenix, AZ 85045",
+  entity: "Roberts Transports - PHX LLC",
+  entityState: "Arizona",
+  vehicle: { year: "2020", make: "Toyota", model: "Camry", vin: "78XXTW35RT997302", plate: "XXX7722", plateType: "Standard" },
+  registrationExpires: "08/25/2027",
+  commercial: {
+    carrier: "Acme Insurance & Casualty",
+    policy: "468 84675-G99-05W",
+    effective: "FEB 23 2026",
+    expires: "AUG 2 2028",
+    expiresIso: "2028-08-02",
+    limits: "75/100/50",
+  },
+  businessLiability: {
+    carrier: "Acme Insurance & Casualty",
+    policy: "468 52917-L31-08B",
+    limit: "$1,000,000",
+    effective: "FEB 23 2026",
+    expires: "AUG 2 2028",
+  },
+  images: {
+    licenseFront: "/demo/license.png",
+    licenseBack: "/demo/license-back.png",
+    registration: "/demo/registration.png",
+    commercialInsurance: "/demo/commercial-insurance.png",
+    entity: "/demo/entity.png",
+  },
+} as const;
+
 type DemoState = {
   started: boolean;
   first: string;
@@ -77,11 +112,11 @@ function sampleOnboardingData(first: string, last: string): OnboardingState["dat
   return {
     fullName: name,
     phone: "(555) 010-0100",
-    address: "100 Sample Street, Demo City, NY 00000",
-    vehMake: "Toyota",
-    vehModel: "Camry",
-    vehYear: "2022",
-    vin: "SAMPLE00000000000",
+    address: DEMO_DOCS.address,
+    vehMake: DEMO_DOCS.vehicle.make,
+    vehModel: DEMO_DOCS.vehicle.model,
+    vehYear: DEMO_DOCS.vehicle.year,
+    vin: DEMO_DOCS.vehicle.vin,
     autoCarrier: "Demo Mutual",
     autoPolicy: "DEMO-AUTO-0001",
     ssn: "000-00-0000",
@@ -97,20 +132,20 @@ function sampleOnboardingData(first: string, last: string): OnboardingState["dat
     stage2Complete: true,
     bgStatus: "cleared",
     entityType: "LLC",
-    entityName: `${last} Transport LLC`,
+    entityName: DEMO_DOCS.entity,
     ein: "00-0000000",
-    formationState: "Delaware",
-    commCarrier: "Demo Commercial",
-    commPolicy: "DEMO-COMM-0001",
-    commInsuranceExpiration: yearsFromNow(1),
+    formationState: DEMO_DOCS.entityState,
+    commCarrier: DEMO_DOCS.commercial.carrier,
+    commPolicy: DEMO_DOCS.commercial.policy,
+    commInsuranceExpiration: DEMO_DOCS.commercial.expiresIso,
     profInsuranceExpiration: yearsFromNow(1),
-    bizLiabPolicy: "T2388-U66-23094",
-    bizLiabLimit: "$1,000,000",
-    bizLiabCarrier: "Farmers",
+    bizLiabPolicy: DEMO_DOCS.businessLiability.policy,
+    bizLiabLimit: DEMO_DOCS.businessLiability.limit,
+    bizLiabCarrier: DEMO_DOCS.businessLiability.carrier,
     confirmBizLiability: true,
-    commLiabPolicy: "DEMO-AUTO-0001",
-    commLiabLimit: "75/100/50",
-    commLiabCarrier: "Demo Mutual",
+    commLiabPolicy: DEMO_DOCS.commercial.policy,
+    commLiabLimit: DEMO_DOCS.commercial.limits,
+    commLiabCarrier: DEMO_DOCS.commercial.carrier,
     confirmCommLiability: true,
     stage4Complete: true,
   };
@@ -123,7 +158,7 @@ function sampleDocuments(): DemoState["documents"] {
     license_front: doc(yearsFromNow(3)),
     license_back: doc(yearsFromNow(3)),
     entity: doc(yearsFromNow(1)),
-    insurance: doc(yearsFromNow(1)),
+    insurance: doc(DEMO_DOCS.commercial.expiresIso),
     professional_insurance: doc(yearsFromNow(1)),
     background: doc(yearsFromNow(1)),
     criminal: doc(null),

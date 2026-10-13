@@ -18,7 +18,8 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { useInstalledAppOnly } from "@/lib/pwa";
 import { isVisitor } from "@/lib/site-role";
-import { useDemoState } from "@/lib/demo";
+import { DEMO_DOCS, useDemoState } from "@/lib/demo";
+import { DemoDocThumb } from "@/components/DemoDocs";
 
 export const Route = createFileRoute("/operator/onboarding")({
   // The real onboarding form must never be reachable on the public website —
@@ -221,10 +222,13 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
   const docMap = Object.fromEntries(documents.map((doc) => [doc.document_type, doc]));
   const licenseFrontUploaded = !!docMap.license_front?.file_url;
   const licenseBackUploaded = !!docMap.license_back?.file_url;
+  // Visitor demo: the VIN printed on the sample documents (16 characters) is
+  // accepted as-is; every other VIN goes through the normal 17-character check.
+  const vinOk = isValidVIN(d.vin) || (isVisitor() && d.vin === DEMO_DOCS.vehicle.vin);
 
   const valid =
     !!d.fullName?.trim() && !!d.address?.trim() && !!d.phone && /\d{10}/.test((d.phone ?? "").replace(/\D/g, "")) &&
-    !!d.vehMake && !!d.vehModel && !!d.vehYear && isValidVIN(d.vin) &&
+    !!d.vehMake && !!d.vehModel && !!d.vehYear && vinOk &&
     !!d.autoCarrier && !!d.autoPolicy && isValidSSN(d.ssn) && luhn(d.debit) && !!d.photoDataUrl &&
     licenseFrontUploaded && licenseBackUploaded && !!d.licenseExpiration;
 
@@ -247,7 +251,7 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
         <Field label="Vehicle make"><Input value={d.vehMake ?? ""} onChange={(v) => set({ vehMake: v })} placeholder="Toyota" /></Field>
         <Field label="Vehicle model"><Input value={d.vehModel ?? ""} onChange={(v) => set({ vehModel: v })} placeholder="Camry" /></Field>
         <Field label="Year"><Input value={d.vehYear ?? ""} onChange={(v) => set({ vehYear: v })} placeholder="2022" /></Field>
-        <Field label="VIN (17 chars)" hint={d.vin && !isValidVIN(d.vin) ? "Invalid VIN format" : undefined}>
+        <Field label="VIN (17 chars)" hint={d.vin && !vinOk ? "Invalid VIN format" : undefined}>
           <Input value={d.vin ?? ""} onChange={(v) => set({ vin: v.toUpperCase() })} placeholder="1HGBH41JXMN109186" />
         </Field>
 
@@ -288,7 +292,9 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
             <Input type="date" value={d.licenseExpiration ?? ""} onChange={(v) => set({ licenseExpiration: v })} />
           </Field>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {isVisitor() ? (
+          <div className="mt-4"><DemoDocThumb kind="license" /></div>
+        ) : <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <DocUploadButton
             label="front"
             accept="image/*"
@@ -303,7 +309,7 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
             uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "license_back"}
             onPick={(file) => file && uploadDocument.mutate({ documentType: "license_back", file, expirationDate: d.licenseExpiration })}
           />
-        </div>
+        </div>}
         {uploadDocument.isError && (
           <p className="mt-2 text-xs text-destructive">Upload failed — please try again.</p>
         )}
@@ -586,12 +592,12 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
         </Field>
         <Field label="State of formation"><Input value={d.formationState ?? ""} onChange={(v) => set({ formationState: v })} placeholder="Delaware" /></Field>
         <Field label="Formation document">
-          <DocUploadButton
+          {isVisitor() ? <DemoDocThumb kind="entity" label="Formation document" /> : <DocUploadButton
             label="formation document"
             uploaded={formationUploaded}
             uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "entity"}
             onPick={(file) => file && uploadDocument.mutate({ documentType: "entity", file })}
-          />
+          />}
         </Field>
       </div>
 
@@ -601,14 +607,22 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
         <Field label="Commercial auto expiration date" hint="Matches what's printed on the declarations page.">
           <Input type="date" value={d.commInsuranceExpiration ?? ""} onChange={(v) => set({ commInsuranceExpiration: v })} />
         </Field>
-        <Field label="Declarations page" full>
-          <DocUploadButton
+        <Field label={isVisitor() ? "Commercial insurance card" : "Declarations page"} full>
+          {isVisitor() ? <DemoDocThumb kind="commercial" /> : <DocUploadButton
             label="declarations page"
             uploaded={declarationsUploaded}
             uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "insurance"}
             onPick={(file) => file && uploadDocument.mutate({ documentType: "insurance", file, expirationDate: d.commInsuranceExpiration })}
-          />
+          />}
         </Field>
+        {isVisitor() && (
+          <Field label="Vehicle registration" full>
+            <DemoDocThumb
+              kind="registration"
+              caption={`${DEMO_DOCS.vehicle.year} ${DEMO_DOCS.vehicle.make} ${DEMO_DOCS.vehicle.model} · VIN ${DEMO_DOCS.vehicle.vin} · Plate ${DEMO_DOCS.vehicle.plate} (${DEMO_DOCS.vehicle.plateType}) · Expires ${DEMO_DOCS.registrationExpires}`}
+            />
+          </Field>
+        )}
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -627,6 +641,14 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
 
       {uploadDocument.isError && (
         <p className="mt-2 text-xs text-destructive">Upload failed — please try again.</p>
+      )}
+
+      {isVisitor() && (
+        <div className="mt-6">
+          <Field label="Business liability insurance card" full>
+            <DemoDocThumb kind="bizliab" />
+          </Field>
+        </div>
       )}
 
       <div className="mt-4 space-y-2">
