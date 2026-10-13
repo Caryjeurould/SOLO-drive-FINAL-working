@@ -194,3 +194,14 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-csa-magnify { animation-name: csa-glow; }
 }
+
+/* Demo dashboard: the pulsing dot on each Ride / Delivery tag. One slow
+   animation with no delay, so every dot blinks in sync. */
+@keyframes csa-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.75); }
+}
+.csa-dot { animation: csa-dot 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .csa-dot { animation: none; }
+}

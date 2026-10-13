@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { BrandText } from "@/components/BrandText";
@@ -14,7 +14,8 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
-import { DEMO_JOBS, DEMO_WEEK, DEMO_WORK_WINDOW_HOURS } from "@/lib/demo";
+import { DEMO_JOBS, DEMO_WEEK, DEMO_WORK_WINDOW_HOURS, useDemoState } from "@/lib/demo";
+import { CsaPopup } from "@/components/CsaPopup";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
 import { useDocuments, DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
@@ -115,6 +116,11 @@ function OperatorDashboard() {
   };
 
   const demo = useIsVisitor();
+  // Demo only: the job whose Contracted Services Agreement pop-up is open.
+  const [csaJob, setCsaJob] = useState<number | null>(null);
+  const closeCsa = useCallback(() => setCsaJob(null), []);
+  const demoState = useDemoState();
+  const csaOperator = demoState.first ? `${demoState.first} ${(demoState.last || "O")[0]}.` : "Demo O.";
   const hoursCap = 50;
   const dailyHours = demo ? DEMO_WEEK.dailyHours : computeDailyHours(weeklyTrips);
   const hoursLogged = dailyHours.reduce((s, h) => s + h, 0);
@@ -398,12 +404,22 @@ function OperatorDashboard() {
                   <div key={i} className="flex items-center justify-between gap-3 py-3 text-sm">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={cn(
-                          "shrink-0 rounded-full px-2 py-0.5 text-[10px]",
-                          j.kind === "Ride" ? "bg-primary/15 text-primary-glow" : "bg-warning/15 text-warning",
-                        )}>
-                          {j.kind}
-                        </span>
+                        {/* The tag is the only way to open the pop-up (the row isn't tappable,
+                            so scrolling never opens it). 44px touch area, same look. */}
+                        <button
+                          type="button"
+                          onClick={() => setCsaJob(i)}
+                          aria-label={`Contracted Services Agreement: ${j.kind}, ${j.when}`}
+                          className="-my-3 flex h-11 shrink-0 items-center"
+                        >
+                          <span className={cn(
+                            "flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]",
+                            j.kind === "Ride" ? "bg-primary/15 text-primary-glow" : "bg-warning/15 text-warning",
+                          )}>
+                            <span className="csa-dot h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+                            {j.kind}
+                          </span>
+                        </button>
                         <span className="truncate font-medium">{j.from} → {j.to}</span>
                       </div>
                       <div className="mt-0.5 text-xs text-muted-foreground">
@@ -445,6 +461,10 @@ function OperatorDashboard() {
           </div>
         </section>
       </div>
+
+      {demo && csaJob != null && DEMO_JOBS[csaJob] && (
+        <CsaPopup job={DEMO_JOBS[csaJob]} operator={csaOperator} onClose={closeCsa} />
+      )}
 
       {tripNeedingFeedback && (
         <PostTripReportPrompt
