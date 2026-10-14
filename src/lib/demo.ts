@@ -15,13 +15,12 @@ export const DEMO_WORK_WINDOW_HOURS = 12;
 const DEMO_ID = "00000000-0000-4000-8000-000000000000";
 
 /** The sample Operator documents (images in public/demo/, plus a Business
- *  Liability card drawn in code). The documents always show this fixed
- *  person; the visitor's typed name still appears in agreements and pop-ups.
- *  Every prefilled vehicle / policy field in the demo reads from here. */
+ *  Liability card drawn in code). The fixed data (address, vehicle, policies,
+ *  dates) lives here; the name on the documents is the visitor's own, from
+ *  demoDocNames() below. Every prefilled vehicle / policy field in the demo
+ *  reads from here. */
 export const DEMO_DOCS = {
-  name: "Marcus Paul Roberts",
   address: "1575 Montana Ave, Phoenix, AZ 85045",
-  entity: "Roberts Transports - PHX LLC",
   entityState: "Arizona",
   vehicle: { year: "2020", make: "Toyota", model: "Camry", vin: "78XXTW35RT997302", plate: "XXX7722", plateType: "Standard" },
   registrationExpires: "08/25/2027",
@@ -48,6 +47,15 @@ export const DEMO_DOCS = {
     entity: "/demo/entity.png",
   },
 } as const;
+
+/** The name printed on the demo documents: the name typed on the demo name
+ *  screen, or the default "Demo Operator" when it was skipped. The business is
+ *  "<Last> Transports - PHX LLC"; the entity's second signer is "Cheryl <Last>". */
+export function demoDocNames(first?: string, last?: string) {
+  const f = first?.trim() || DEMO_DEFAULT_NAME.first;
+  const l = last?.trim() || DEMO_DEFAULT_NAME.last;
+  return { first: f, last: l, full: `${f} ${l}`, entity: `${l} Transports - PHX LLC`, coSigner: `Cheryl ${l}` };
+}
 
 /** The website's Customer booking card: the sample Operator shown when no real
  *  Operator comes back from the database (always, for visitors, whose database
@@ -145,7 +153,7 @@ function sampleOnboardingData(first: string, last: string): OnboardingState["dat
     stage2Complete: true,
     bgStatus: "cleared",
     entityType: "LLC",
-    entityName: DEMO_DOCS.entity,
+    entityName: demoDocNames(first, last).entity,
     ein: "00-0000000",
     formationState: DEMO_DOCS.entityState,
     commCarrier: DEMO_DOCS.commercial.carrier,
