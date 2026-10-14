@@ -173,7 +173,7 @@ function DocRow({
             {status === "missing" && "Required to go online"}
           </div>
           {showExpiration && (
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
               <input
                 type="date"

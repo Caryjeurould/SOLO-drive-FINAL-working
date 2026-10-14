@@ -365,7 +365,7 @@ function OperatorDashboard() {
 
         {/* Subscription block + recent trips */}
         <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-          <div className="rounded-3xl border border-border bg-gradient-surface p-6 shadow-card">
+          <div className="min-w-0 rounded-3xl border border-border bg-gradient-surface p-6 shadow-card">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs uppercase tracking-widest text-muted-foreground">Monthly access</div>
@@ -393,7 +393,7 @@ function OperatorDashboard() {
             </button>
           </div>
 
-          <div className="rounded-3xl border border-border bg-card p-6 shadow-card">
+          <div className="min-w-0 rounded-3xl border border-border bg-card p-6 shadow-card">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-xl">{demo ? "Recent rides & deliveries" : "Recent trips"}</h3>
               <span className="text-xs text-muted-foreground">Last {demo ? DEMO_JOBS.length : recentTrips.length}</span>

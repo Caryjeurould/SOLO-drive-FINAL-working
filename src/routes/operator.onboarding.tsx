@@ -719,7 +719,7 @@ function StageFooter({ valid, onContinue, labelContinue = "Continue" }: { valid:
 
 function Field({ label, hint, full, children }: { label: string; hint?: string; full?: boolean; children: React.ReactNode }) {
   return (
-    <div className={cn("flex flex-col gap-1.5", full && "md:col-span-2")}>
+    <div className={cn("flex min-w-0 flex-col gap-1.5", full && "md:col-span-2")}>
       <label className="text-xs uppercase tracking-widest text-muted-foreground">{label}</label>
       {children}
       {hint && <div className="text-[11px] text-warning/90">{hint}</div>}

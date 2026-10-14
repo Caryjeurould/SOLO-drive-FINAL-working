@@ -46,7 +46,7 @@ export function LegalDocViewer({
 
   return (
     <div className={cn("rounded-2xl border bg-card p-5 shadow-card", signed ? "border-success/30" : "border-border")}>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-primary-glow" />
           <h4 className="font-display text-base">{title}</h4>
