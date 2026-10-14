@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 import { DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
 import { BrandText } from "@/components/BrandText";
+import { SAMPLE_FEATURED_OPERATOR } from "@/lib/demo";
+import { isVisitor } from "@/lib/site-role";
 import {
   MapPin, Navigation, Clock, ShieldCheck, Sparkles, ArrowRight,
   FileText, Star, X, Loader2, CheckCircle2, AlertTriangle, FileSignature, Download, Flag,
@@ -22,20 +24,31 @@ type FeaturedOperator = {
 
 /** There's no real rider/operator matching yet — this shows whichever active
  *  operator exists, as a stand-in for "the matched operator" until that system
- *  is built. Real fields, just not a real match. */
+ *  is built. Real fields, just not a real match. If no operator comes back, or
+ *  the request fails or is blocked (always, in visitor mode), the fixed sample
+ *  Operator is shown instead, so the card never dead-ends. */
 function useFeaturedOperator(enabled: boolean) {
   return useQuery({
     queryKey: ["featured-operator"],
     enabled,
     queryFn: async (): Promise<FeaturedOperator | null> => {
-      const { data, error } = await supabase
-        .from("operator_public_profile")
-        .select("id, name, vehicle_make, vehicle_model, vehicle_year")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      const sample = (): FeaturedOperator => {
+        const { id, name, vehicle_make, vehicle_model, vehicle_year } = SAMPLE_FEATURED_OPERATOR;
+        return { id, name, vehicle_make, vehicle_model, vehicle_year };
+      };
+      // Visitors' database connection is switched off: go straight to the sample.
+      if (isVisitor()) return sample();
+      try {
+        const { data, error } = await supabase
+          .from("operator_public_profile")
+          .select("id, name, vehicle_make, vehicle_model, vehicle_year")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        return !error && data ? data : sample();
+      } catch {
+        return sample();
+      }
     },
   });
 }
@@ -45,6 +58,14 @@ function useOperatorVerification(operatorId: string | undefined) {
     queryKey: ["operator-verification", operatorId],
     enabled: !!operatorId,
     queryFn: async () => {
+      // The sample Operator: every requirement verified, no database request.
+      if (operatorId === SAMPLE_FEATURED_OPERATOR.id) {
+        return {
+          docs: DOCUMENT_REQUIREMENTS.flatMap((req) => req.docTypeIds).map((document_type) => ({ document_type, status: "verified" as const })),
+          avgRating: SAMPLE_FEATURED_OPERATOR.avgRating as number | null,
+          ratingsCount: SAMPLE_FEATURED_OPERATOR.ratingsCount,
+        };
+      }
       const [{ data: docs, error: docErr }, { data: rating, error: ratingErr }] = await Promise.all([
         supabase.from("operator_document_status").select("document_type, status").eq("operator_id", operatorId!),
         supabase.from("operator_rating_summary").select("avg_rating, ratings_count").eq("operator_id", operatorId!).maybeSingle(),

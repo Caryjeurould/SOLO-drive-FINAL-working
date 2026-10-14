@@ -49,6 +49,19 @@ export const DEMO_DOCS = {
   },
 } as const;
 
+/** The website's Customer booking card: the sample Operator shown when no real
+ *  Operator comes back from the database (always, for visitors, whose database
+ *  connection is switched off). Built from DEMO_DOCS; all documents verified. */
+export const SAMPLE_FEATURED_OPERATOR = {
+  id: "sample-featured-operator",
+  name: "Marcus R.",
+  vehicle_make: DEMO_DOCS.vehicle.make,
+  vehicle_model: DEMO_DOCS.vehicle.model,
+  vehicle_year: Number(DEMO_DOCS.vehicle.year),
+  avgRating: 4.91,
+  ratingsCount: 287,
+};
+
 type DemoState = {
   started: boolean;
   first: string;
