@@ -1,5 +1,5 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   User, Car, FileSignature, FileSearch, Building2, Lock, Check,
   Plus, X, Upload, ArrowRight, ArrowLeft, AlertTriangle, Sparkles, CheckCircle2,
@@ -52,6 +52,12 @@ function InstalledAppOnboarding() {
   return allowed ? <OnboardingWizard /> : null;
 }
 
+/** Visitor demo: true while the page is gliding to a newly opened stage, so that
+ *  stage's Next doesn't count the end as "reached" on the way past it. */
+const DemoSettlingContext = createContext(false);
+const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const headerHeight = () => document.querySelector("header")?.offsetHeight ?? 0;
+
 function OnboardingWizard() {
   const [state, update] = useOnboarding();
   const navigate = useNavigate();
@@ -64,6 +70,64 @@ function OnboardingWizard() {
   useEffect(() => {
     if (demo && !demoStarted) navigate({ to: "/operator/demo", replace: true });
   }, [demo, demoStarted, navigate]);
+
+  // Visitor demo: suggestive scrolling. Like the homepage, snapping is set on
+  // <html> (the page scrolls there) only while this page is mounted, with the
+  // sticky header's height as padding; here it's "proximity", so the page only
+  // settles on a content block when it stops near one. Off with reduced motion.
+  useEffect(() => {
+    if (!demo || reducedMotion()) return;
+    const root = document.documentElement;
+    const prevType = root.style.scrollSnapType;
+    const prevPadding = root.style.scrollPaddingTop;
+    root.style.scrollSnapType = "y proximity";
+    root.style.scrollPaddingTop = `${headerHeight() + 8}px`;
+    return () => {
+      root.style.scrollSnapType = prevType;
+      root.style.scrollPaddingTop = prevPadding;
+    };
+  }, [demo]);
+
+  // Visitor demo: after Next or Back, glide so the new stage's card sits just
+  // under the header (instant with reduced motion).
+  const cardRef = useRef<HTMLDivElement>(null);
+  const padRef = useRef<HTMLDivElement>(null);
+  const glide = useRef(false);
+  const [settling, setSettling] = useState(false);
+  useEffect(() => {
+    if (!demo || !glide.current) return;
+    glide.current = false;
+    const card = cardRef.current;
+    if (!card) { setSettling(false); return; }
+    // A short stage leaves too little page below it to bring its card up under
+    // the header, so add just enough empty space after it (none for long stages).
+    const pad = padRef.current;
+    if (pad) pad.style.height = "0px";
+    const want = Math.max(0, card.getBoundingClientRect().top + window.scrollY - headerHeight() - 8);
+    let max = document.documentElement.scrollHeight - window.innerHeight;
+    if (pad && want > max) { pad.style.height = `${Math.ceil(want - max)}px`; max = want; }
+    const top = Math.min(max, want);
+    window.scrollTo({ top, behavior: reducedMotion() ? "auto" : "smooth" });
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("scroll", onScroll);
+      window.clearTimeout(timer);
+      setSettling(false);
+    };
+    const onScroll = () => { if (Math.abs(window.scrollY - top) < 2) finish(); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    const timer = window.setTimeout(finish, 1500);
+    onScroll();
+    return finish;
+  }, [active, demo]);
+  const glideTo = (n: 1 | 2 | 3 | 4) => {
+    glide.current = true;
+    setSettling(true);
+    setActive(n);
+  };
+
   if (demo && !demoStarted) return null;
 
   if (state.status === "approved" && demo) {
@@ -125,30 +189,32 @@ function OnboardingWizard() {
 
   const advance = (from: 1 | 2 | 3 | 4) => {
     const next = (from + 1) as 1 | 2 | 3 | 4;
-    // The demo moves page by page (its Next bar is pinned at the bottom), so
-    // each stage, and the Approved screen, starts at the top.
-    if (demo) window.scrollTo({ top: 0 });
     if (next > 4) {
+      // The demo's Approved screen starts at the top.
+      if (demo) window.scrollTo({ top: 0 });
       update({ status: "approved" });
       // The demo shows its Approved screen first (this same page).
       if (!demo) navigate({ to: "/operator" });
       return;
     }
     update({ stage: next, status: "in_progress" });
-    setActive(next);
+    if (demo) glideTo(next);
+    else setActive(next);
   };
 
   // The header's back chip: previous wizard screen, or out to the app's start
   // screen from the first one. (Its default target, the homepage, isn't part of
   // the Operator app, so the installed-app guard used to bounce it.)
   const back = () => {
-    if (active > 1) setActive((active - 1) as 1 | 2 | 3);
-    else navigate({ to: "/operator/start" });
+    if (active > 1) {
+      if (demo) glideTo((active - 1) as 1 | 2 | 3);
+      else setActive((active - 1) as 1 | 2 | 3);
+    } else navigate({ to: "/operator/start" });
   };
 
   return (
     <AppShell onBack={back}>
-      <div className={cn("mx-auto max-w-5xl px-4 py-10 md:px-8", demo && "pb-28")}>
+      <div className="mx-auto max-w-5xl px-4 py-10 md:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground"><BrandText>Smart+Logix™ Authorization</BrandText></div>
@@ -199,12 +265,23 @@ function OnboardingWizard() {
         </div>
 
         {/* Stage content */}
-        <div className="mt-8 rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated md:p-8">
-          {active === 1 && <Stage1 state={state} update={update} onDone={() => advance(1)} />}
-          {active === 2 && <Stage2 state={state} update={update} onDone={() => advance(2)} />}
-          {active === 3 && <Stage3 state={state} update={update} onDone={() => advance(3)} />}
-          {active === 4 && <Stage4 state={state} update={update} onDone={() => advance(4)} />}
+        <div
+          ref={cardRef}
+          data-testid={demo ? "demo-stage-card" : undefined}
+          className={cn(
+            "mt-8 rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated md:p-8",
+            // Visitor demo: the card and each content block of the stage are snap points.
+            demo && "snap-start [&>div>*]:snap-start",
+          )}
+        >
+          <DemoSettlingContext.Provider value={settling}>
+            {active === 1 && <Stage1 state={state} update={update} onDone={() => advance(1)} />}
+            {active === 2 && <Stage2 state={state} update={update} onDone={() => advance(2)} />}
+            {active === 3 && <Stage3 state={state} update={update} onDone={() => advance(3)} />}
+            {active === 4 && <Stage4 state={state} update={update} onDone={() => advance(4)} />}
+          </DemoSettlingContext.Provider>
         </div>
+        {demo && <div ref={padRef} aria-hidden="true" />}
       </div>
     </AppShell>
   );
@@ -737,15 +814,18 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
     />
   );
 }
-/** Visitor demo: the stage's Next button, pinned to the bottom of the screen,
- *  with a quiet "scroll ↓" cue while more of the stage is below. */
+/** Visitor demo: the stage's Next button, inline at the end of the stage. Its
+ *  place is kept but it stays hidden until the visitor has scrolled to the end
+ *  of the stage (then it stays); until then a quiet "scroll ↓" hint shows. */
 function DemoNextBar({ valid, onNext }: { valid: boolean; onNext: () => void }) {
+  const settling = useContext(DemoSettlingContext);
   const endRef = useRef<HTMLDivElement>(null);
-  const [moreBelow, setMoreBelow] = useState(false);
+  const [reached, setReached] = useState(false);
   useEffect(() => {
+    if (settling || reached) return;
     const check = () => {
       const end = endRef.current;
-      setMoreBelow(!!end && end.getBoundingClientRect().top > window.innerHeight - 72);
+      if (end && end.getBoundingClientRect().top <= window.innerHeight) setReached(true);
     };
     check();
     window.addEventListener("scroll", check, { passive: true });
@@ -757,29 +837,30 @@ function DemoNextBar({ valid, onNext }: { valid: boolean; onNext: () => void }) 
       window.removeEventListener("resize", check);
       ro.disconnect();
     };
-  }, []);
+  }, [settling, reached]);
 
   return (
     <>
-      {/* Marks the end of the stage, for the scroll cue. */}
-      <div ref={endRef} />
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border/60 bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 md:px-8">
-          <span aria-hidden="true" className={cn("text-[11px] text-muted-foreground/70 transition-opacity", moreBelow ? "opacity-100" : "opacity-0")}>
-            scroll ↓
-          </span>
-          <button
-            onClick={onNext}
-            disabled={!valid}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-medium transition",
-              valid ? "bg-gradient-primary text-primary-foreground shadow-glow hover:scale-[1.02]" : "cursor-not-allowed bg-muted text-muted-foreground/60",
-            )}
-          >
-            Next <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
+      <div className={cn("mt-8 flex justify-end border-t border-border pt-6", !reached && "invisible")} aria-hidden={!reached || undefined}>
+        <button
+          onClick={onNext}
+          disabled={!valid || !reached}
+          tabIndex={reached ? undefined : -1}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-medium transition",
+            valid ? "bg-gradient-primary text-primary-foreground shadow-glow hover:scale-[1.02]" : "cursor-not-allowed bg-muted text-muted-foreground/60",
+          )}
+        >
+          Next <ArrowRight className="h-4 w-4" />
+        </button>
       </div>
+      {/* Marks the end of the stage (below the Next button, so reaching it means Next is on screen). */}
+      <div ref={endRef} data-testid="demo-stage-end" />
+      {!reached && (
+        <span aria-hidden="true" className="pointer-events-none fixed bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-background/80 px-3 py-1 text-[11px] text-muted-foreground/80 backdrop-blur">
+          scroll ↓
+        </span>
+      )}
     </>
   );
 }
