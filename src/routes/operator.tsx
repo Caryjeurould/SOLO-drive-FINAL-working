@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { BrandText } from "@/components/BrandText";
@@ -114,6 +114,8 @@ async function fetchApproxArea(): Promise<[number, number] | null> {
 }
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** The online map never gets shorter than this; only screens too short for it scroll. */
+const ONLINE_MAP_MIN_PX = 200;
 /** Scroll so `el` sits just under the sticky header. */
 function scrollUnderHeader(el: HTMLElement | null) {
   if (!el) return;
@@ -147,6 +149,11 @@ function OperatorDashboard() {
   const setDemoArea = (a: DemoArea | null) => { demoOnlineArea = a; setDemoAreaState(a); };
   const onlineCardRef = useRef<HTMLDivElement>(null);
   const mapSectionRef = useRef<HTMLDivElement>(null);
+  const mapBoxRef = useRef<HTMLDivElement>(null);
+  // The online map's height: whatever the screen has left under the header once
+  // the bar, the three rows and the waiting card fit (so the whole block shows
+  // at once), but never under ONLINE_MAP_MIN_PX.
+  const [onlineMapH, setOnlineMapH] = useState<number | null>(null);
   const pendingScroll = useRef<"map" | "card" | null>(null);
 
   const stopDemo = (shiftId: string) => {
@@ -183,11 +190,24 @@ function OperatorDashboard() {
   // While the demo is online the dashboard shows only the status, the map and
   // the trip panel under it; Stop brings everything else back.
   const showMap = demo && online && !!demoArea;
-  // Online: glide down to the map; stopped: back up to the Online card.
+  // Online: glide so the whole map block sits under the header (once it's sized); stopped: back up to the Online card.
   useEffect(() => {
-    if (pendingScroll.current === "map" && showMap) { pendingScroll.current = null; scrollUnderHeader(mapSectionRef.current); }
+    if (pendingScroll.current === "map" && showMap && onlineMapH != null) { pendingScroll.current = null; scrollUnderHeader(mapSectionRef.current); }
     else if (pendingScroll.current === "card" && !online) { pendingScroll.current = null; scrollUnderHeader(onlineCardRef.current); }
-  }, [showMap, online]);
+  }, [showMap, online, onlineMapH]);
+  useLayoutEffect(() => {
+    if (!showMap) { setOnlineMapH(null); return; }
+    const fit = () => {
+      const block = mapSectionRef.current, box = mapBoxRef.current;
+      if (!block || !box) return;
+      const header = document.querySelector("header")?.offsetHeight ?? 0;
+      const rest = block.offsetHeight - box.offsetHeight; // bar, rows, waiting card, padding
+      setOnlineMapH(Math.max(ONLINE_MAP_MIN_PX, Math.floor(window.innerHeight - header - 16 - rest)));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [showMap]);
   const simulationArea = useMemo(
     () => (demoArea ? { center: demoArea.center, address: SIM_PICKUP_ADDRESS, zoom: SIM_ZOOM, cars: 12 } : null),
     [demoArea],
@@ -416,7 +436,9 @@ function OperatorDashboard() {
               <div className="mb-3 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
                 <span className="h-2 w-2 rounded-full bg-success motion-safe:animate-pulse" /> Online · Looking for requests
               </div>
-              <MapboxMap className="h-[66svh] min-h-[340px] w-full sm:h-[72svh] sm:max-h-[780px]" simulationArea={simulationArea} />
+              <div ref={mapBoxRef} style={{ height: onlineMapH ?? ONLINE_MAP_MIN_PX }}>
+                <MapboxMap className="h-full w-full" simulationArea={simulationArea} />
+              </div>
               <div data-testid="online-trip-panel">
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   <Pill icon={<Navigation className="h-3.5 w-3.5" />} label="Distance" value="0.0 mi" />
