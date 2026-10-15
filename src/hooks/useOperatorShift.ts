@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { startOfWeek } from "date-fns";
 import { supabase } from "@/lib/supabase";
 import { isVisitor } from "@/lib/site-role";
-import { demoShift, newDemoShift, setDemoShift } from "@/lib/demo";
+import { activeSession, endSession, sessionsSince, startSession } from "@/lib/onlineSessions";
 import { useAuth } from "@/lib/auth";
 
 export type ShiftServiceType = "rideshare" | "delivery" | "both";
@@ -44,7 +45,7 @@ export function useActiveShift() {
     queryKey: ["operator-shift", "active", user?.id],
     enabled: !!user,
     queryFn: async (): Promise<OperatorShift | null> => {
-      if (isVisitor()) return demoShift();
+      if (isVisitor()) return activeSession();
       const { data, error } = await supabase
         .from("operator_shifts")
         .select("*")
@@ -65,7 +66,7 @@ export function useGoOnline() {
 
   return useMutation({
     mutationFn: async (serviceType: ShiftServiceType) => {
-      if (isVisitor()) { const shift = newDemoShift(serviceType); setDemoShift(shift); return shift; }
+      if (isVisitor()) return startSession(user!.id, serviceType);
       const pos = await getCurrentPosition();
       const { data, error } = await supabase
         .from("operator_shifts")
@@ -81,7 +82,7 @@ export function useGoOnline() {
       if (error) throw error;
       return data as OperatorShift;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["operator-shift", "active", user?.id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["operator-shift"] }),
   });
 }
 
@@ -92,14 +93,29 @@ export function useGoOffline() {
 
   return useMutation({
     mutationFn: async (shiftId: string) => {
-      if (isVisitor()) { setDemoShift(null); return; }
+      if (isVisitor()) { endSession(shiftId); return; }
       const { error } = await supabase
         .from("operator_shifts")
         .update({ ended_at: new Date().toISOString() })
         .eq("id", shiftId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["operator-shift", "active", user?.id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["operator-shift"] }),
+  });
+}
+
+/** This week's online sessions (Go online → Stop), oldest first — what the
+ *  hours are computed from (computeDailyHoursFromSessions). Demo only for now:
+ *  the real dashboard still counts trip minutes until it reads operator_shifts
+ *  here (see lib/onlineSessions). */
+export function useWeeklyShifts() {
+  const { user } = useAuth();
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+
+  return useQuery({
+    queryKey: ["operator-shift", "week", user?.id, weekStart.toISOString()],
+    enabled: !!user && isVisitor(),
+    queryFn: async (): Promise<OperatorShift[]> => sessionsSince(weekStart),
   });
 }
 

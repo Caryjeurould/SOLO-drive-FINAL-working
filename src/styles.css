@@ -207,3 +207,13 @@
 @media (prefers-reduced-motion: reduce) {
   .csa-dot { animation: none; }
 }
+
+/* Demo Go-online panel: the flashing "Waiting on request" dot (steady with reduced motion). */
+@keyframes waiting-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+.waiting-dot { animation: waiting-dot 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .waiting-dot { animation: none; }
+}

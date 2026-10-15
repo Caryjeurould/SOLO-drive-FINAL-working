@@ -689,7 +689,8 @@ function DisplayField({ icon, label, value }: { icon: React.ReactNode; label: st
   );
 }
 
-function Pill({ icon, label, value, valueClassName }: { icon: React.ReactNode; label: string; value: string; valueClassName?: string }) {
+/** A row of the website trip card (Distance / Trip ETA / Arrival); the Operator demo's online panel reuses it. */
+export function Pill({ icon, label, value, valueClassName }: { icon: React.ReactNode; label: string; value: string; valueClassName?: string }) {
   return (
     <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3">
       <span className="flex items-center gap-2 text-xs text-muted-foreground">{icon} {label}</span>

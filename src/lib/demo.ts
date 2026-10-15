@@ -8,6 +8,7 @@ import { LEGAL_DOCS, type OnboardingState } from "@/lib/onboarding";
 import type { OperatorProfile } from "@/hooks/useOperatorProfile";
 import type { OperatorDocument } from "@/hooks/useDocuments";
 import type { OperatorShift } from "@/hooks/useOperatorShift";
+import { resetSessions } from "@/lib/onlineSessions";
 
 export const DEMO_DEFAULT_NAME = { first: "Demo", last: "Operator" };
 /** The daily work window the demo Operator declared (shown beside the 50-hour weekly cap). */
@@ -60,9 +61,9 @@ export function demoDocNames(first?: string, last?: string) {
 /** The website simulation's pickup (its Book-A-Ride card and /customer start
  *  here). The Operator demo's Go-online map falls back to the same spot. */
 export const SIM_PICKUP_ADDRESS = "1333 Camelback Rd, Phoenix, AZ";
-/** The Go-online map's zoom: the website simulation's map at full size (it
- *  frames a whole route, so on phones it ends up wider, ~9.4). */
-export const SIM_ZOOM = 11;
+/** The Go-online map's zoom: street level (about 2 m per pixel), so cars at
+ *  real city speeds (15-30 mph) visibly creep along the streets. */
+export const SIM_ZOOM = 15;
 
 /** The website's Customer booking card: the sample Operator shown when no real
  *  Operator comes back from the database (always, for visitors, whose database
@@ -84,7 +85,6 @@ type DemoState = {
   onboarding: OnboardingState;
   profile: Partial<OperatorProfile>;
   documents: Record<string, Pick<OperatorDocument, "status" | "expiration_date" | "file_url">>;
-  shift: OperatorShift | null;
 };
 
 const EMPTY_ONBOARDING: OnboardingState = { stage: 1, status: "not_started", data: {} };
@@ -95,7 +95,6 @@ const fresh = (): DemoState => ({
   onboarding: EMPTY_ONBOARDING,
   profile: {},
   documents: {},
-  shift: null,
 });
 
 let state: DemoState = fresh();
@@ -205,9 +204,11 @@ export function startDemo(firstName: string, lastName: string) {
     onboarding: { stage: 1, status: "in_progress", data: sampleOnboardingData(first, last) },
     documents: sampleDocuments(),
   });
+  resetSessions(demoWeekSessions());
 }
 
 export function resetDemo() {
+  resetSessions();
   set(fresh());
 }
 
@@ -407,21 +408,29 @@ export const DEMO_JOBS: DemoJob[] = [
   { when: "Mon 6:05 am", kind: "Ride", from: "Mock Library", to: "Sample Plaza", miles: 9.6, fare: 25.73, minutes: 37 },
 ];
 
-export function demoShift(): OperatorShift | null {
-  return state.shift;
-}
-export function setDemoShift(shift: OperatorShift | null) {
-  set({ ...state, shift });
-}
-export function newDemoShift(serviceType: OperatorShift["service_type"]): OperatorShift {
-  return {
-    id: "demo-shift",
-    operator_id: DEMO_ID,
-    service_type: serviceType,
-    started_at: new Date().toISOString(),
-    ended_at: null,
-    last_lat: null,
-    last_lng: null,
-    last_location_at: null,
-  };
+/** The demo Operator's work days [Mon … Sun]: the days of DEMO_WEEK with hours. */
+export const DEMO_WORK_DAYS = DEMO_WEEK.dailyHours.map((h) => h > 0);
+
+/** The demo week as online sessions (the records the hours are computed from):
+ *  one per work day of the current week, from 6:00 am for that day's hours. */
+function demoWeekSessions(): OperatorShift[] {
+  const monday = new Date();
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  return DEMO_WEEK.dailyHours.flatMap((hours, i) => {
+    if (!hours) return [];
+    const start = new Date(monday);
+    start.setDate(monday.getDate() + i);
+    start.setHours(6);
+    return [{
+      id: `demo-week-${i}`,
+      operator_id: DEMO_ID,
+      service_type: "both" as const,
+      started_at: start.toISOString(),
+      ended_at: new Date(start.getTime() + hours * 3_600_000).toISOString(),
+      last_lat: null,
+      last_lng: null,
+      last_location_at: null,
+    }];
+  });
 }

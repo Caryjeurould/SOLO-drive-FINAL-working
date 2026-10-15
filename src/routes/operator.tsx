@@ -9,18 +9,22 @@ import { PostTripReportPrompt } from "@/components/PostTripReportPrompt";
 import { PanicButton } from "@/components/PanicButton";
 import {
   Power, Clock, CalendarCheck, AlertTriangle, FileLock2, ShieldCheck,
-  TrendingUp, DollarSign, CheckCircle2, FileText, ArrowRight, Loader2, MapPin,
+  TrendingUp, DollarSign, CheckCircle2, FileText, ArrowRight, Loader2, MapPin, Navigation, Flag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
-import { DEMO_JOBS, DEMO_WEEK, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM, useDemoState } from "@/lib/demo";
+import { DEMO_JOBS, DEMO_WEEK, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM, useDemoState } from "@/lib/demo";
 import { MapboxMap } from "@/components/MapboxMap";
+import { Pill } from "@/components/SmartRateBooking";
 import { CsaPopup } from "@/components/CsaPopup";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
-import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
+import {
+  useWeeklyTrips, useRecentTrips, computeDailyHours, computeDailyHoursFromSessions, computeWeeklyEarnings,
+  DAILY_HOURS_CAP, WEEKLY_HOURS_CAP,
+} from "@/hooks/useTrips";
 import { useDocuments, DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
-import { useActiveShift, useGoOnline, useGoOffline, useLocationPing } from "@/hooks/useOperatorShift";
+import { useActiveShift, useGoOnline, useGoOffline, useLocationPing, useWeeklyShifts } from "@/hooks/useOperatorShift";
 import type { ShiftServiceType } from "@/hooks/useOperatorShift";
 
 /** The most recent completed trip matched to this operator that they haven't
@@ -131,8 +135,9 @@ function OperatorDashboard() {
   const { data: documents = [], isLoading: docsLoading } = useDocuments();
   const { data: tripNeedingFeedback, refetch: refetchFeedbackTrip } = useOperatorTripNeedingFeedback(operator?.id);
   const { data: activeTrip } = useOperatorActiveTrip(operator?.id);
+  const { data: weekShifts = [], isLoading: weekShiftsLoading } = useWeeklyShifts();
 
-  const isLoading = opLoading || tripsLoading || docsLoading || shiftLoading;
+  const isLoading = opLoading || tripsLoading || docsLoading || shiftLoading || weekShiftsLoading;
 
   // Demo only: "Go online" first asks to use the visitor's location (for the
   // simulation map), then shows the map under the Online card.
@@ -144,12 +149,15 @@ function OperatorDashboard() {
   const mapSectionRef = useRef<HTMLDivElement>(null);
   const pendingScroll = useRef<"map" | "card" | null>(null);
 
+  const stopDemo = (shiftId: string) => {
+    setDemoArea(null);
+    pendingScroll.current = "card";
+    goOffline.mutate(shiftId);
+  };
   const handleToggleOnline = () => {
     if (isVisitor()) {
       if (online && activeShift) {
-        setDemoArea(null);
-        pendingScroll.current = "card";
-        goOffline.mutate(activeShift.id);
+        stopDemo(activeShift.id);
       } else if (!online) {
         setAskLocation(true);
       }
@@ -172,6 +180,8 @@ function OperatorDashboard() {
     pendingScroll.current = "map";
     goOnline.mutate(serviceType);
   };
+  // While the demo is online the dashboard shows only the status, the map and
+  // the trip panel under it; Stop brings everything else back.
   const showMap = demo && online && !!demoArea;
   // Online: glide down to the map; stopped: back up to the Online card.
   useEffect(() => {
@@ -187,17 +197,32 @@ function OperatorDashboard() {
   const closeCsa = useCallback(() => setCsaJob(null), []);
   const demoState = useDemoState();
   const csaOperator = demoState.first ? `${demoState.first} ${(demoState.last || "O")[0]}.` : "Demo O.";
-  const hoursCap = 50;
-  const dailyHours = demo ? DEMO_WEEK.dailyHours : computeDailyHours(weeklyTrips);
-  const hoursLogged = dailyHours.reduce((s, h) => s + h, 0);
+  const hoursCap = WEEKLY_HOURS_CAP;
+  // Demo: hours come from the online sessions (Go online → Stop), as they will
+  // for real Operators; a day that isn't a demo work day gets no bar.
+  const dailyHours = demo ? computeDailyHoursFromSessions(weekShifts, { workDays: DEMO_WORK_DAYS }) : computeDailyHours(weeklyTrips);
+  const hoursLogged = Math.round(dailyHours.reduce((s, h) => s + h, 0) * 10) / 10;
   const hoursLeft = hoursCap - hoursLogged;
+  const todayIndex = (new Date().getDay() + 6) % 7;
+  const todayCapReached = demo && DEMO_WORK_DAYS[todayIndex] && dailyHours[todayIndex] >= DAILY_HOURS_CAP;
   const subActive = operator?.subscription_active ?? false;
   const docsVerified = DOCUMENT_REQUIREMENTS.filter((req) =>
     req.docTypeIds.every((typeId) => documents.some((d) => d.document_type === typeId && d.verified))
   ).length;
   const docsTotal = DOCUMENT_REQUIREMENTS.length;
   const accountActive = (operator?.status ?? "active") === "active";
-  const canGoOnline = accountActive && subActive && hoursLeft > 0 && docsVerified === docsTotal;
+  const canGoOnline = accountActive && subActive && hoursLeft > 0 && !todayCapReached && docsVerified === docsTotal;
+
+  // Demo: going online stops by itself when the daily (10 h) or weekly (50 h) cap is reached.
+  useEffect(() => {
+    if (!demo || !activeShift || !DEMO_WORK_DAYS[todayIndex]) return;
+    const closed = computeDailyHoursFromSessions(weekShifts.filter((s) => s.id !== activeShift.id), { workDays: DEMO_WORK_DAYS });
+    const leftHours = Math.min(DAILY_HOURS_CAP - closed[todayIndex], WEEKLY_HOURS_CAP - closed.reduce((s, h) => s + h, 0));
+    const ms = new Date(activeShift.started_at).getTime() + leftHours * 3_600_000 - Date.now();
+    const t = setTimeout(() => stopDemo(activeShift.id), Math.max(0, ms));
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demo, activeShift?.id, weekShifts, todayIndex]);
 
   const { total: weekEarnings, avg: avgFare, count: tripCount } = demo
     ? { total: DEMO_WEEK.earnings, avg: DEMO_WEEK.avgFare, count: DEMO_WEEK.trips }
@@ -225,7 +250,7 @@ function OperatorDashboard() {
   return (
     <AppShell>
       <div className="mx-auto max-w-7xl px-4 py-10 md:px-8">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+        <header className={cn("flex flex-wrap items-end justify-between gap-4", showMap && "hidden")}>
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Operator Console</div>
             <h1 className="mt-1 font-display text-4xl font-semibold">{greeting}, {displayName}</h1>
@@ -243,9 +268,9 @@ function OperatorDashboard() {
         </header>
 
         {/* Go online card */}
-        <section className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+        <section className={cn("grid gap-6", showMap ? "mt-2" : "mt-8 lg:grid-cols-[1.2fr_1fr]")}>
           <div className="flex min-w-0 flex-col gap-6">
-          <div ref={onlineCardRef} className="relative overflow-hidden rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated">
+          <div ref={onlineCardRef} className={cn("relative overflow-hidden rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated", showMap && "pb-12")}>
             <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-primary opacity-20 blur-3xl" />
             <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div>
@@ -254,7 +279,7 @@ function OperatorDashboard() {
                   <span className={cn("h-3 w-3 rounded-full", online ? "bg-success animate-pulse" : "bg-muted-foreground/40")} />
                   <span className="font-display text-3xl font-semibold">{online ? "Online & accepting" : "Offline"}</span>
                 </div>
-                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                <p className={cn("mt-2 max-w-md text-sm text-muted-foreground", showMap && "hidden")}>
                   {!accountActive
                     ? operator?.status === "terminated"
                       ? "Your account has been permanently terminated. Contact Compliance for details."
@@ -265,7 +290,7 @@ function OperatorDashboard() {
                 </p>
 
                 {online ? (
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                  <div className={cn("mt-4 flex flex-wrap items-center gap-2 text-xs", showMap && "hidden")}>
                     <span className="rounded-full bg-primary/10 px-2.5 py-1 capitalize text-primary-glow">
                       {activeShift?.service_type === "both" ? "Rideshare + Delivery" : activeShift?.service_type}
                     </span>
@@ -355,7 +380,7 @@ function OperatorDashboard() {
             )}
 
             {/* Guardrails */}
-            <div className="relative mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className={cn("relative mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4", showMap && "hidden")}>
               <Guardrail
                 ok={accountActive}
                 icon={<ShieldCheck className="h-4 w-4" />}
@@ -372,7 +397,7 @@ function OperatorDashboard() {
                 ok={hoursLeft > 0}
                 icon={<Clock className="h-4 w-4" />}
                 label="Weekly hours"
-                value={`${Math.max(0, hoursLeft).toFixed(1)}h left`}
+                value={todayCapReached ? "Daily 10h reached" : `${Math.max(0, hoursLeft).toFixed(1)}h left`}
               />
               <Guardrail
                 ok={docsVerified === docsTotal}
@@ -383,20 +408,33 @@ function OperatorDashboard() {
             </div>
           </div>
 
-          {/* Demo only, while online: the simulation map (same map, size and
-              cars as the website simulation). */}
+          {/* Demo only, while online: the simulation map (the website's map and
+              cars, street level), then the website trip card's rows and, where
+              its Contracted Services card sits, "Waiting on request". */}
           {showMap && (
-            <div ref={mapSectionRef} data-testid="online-map" className="rounded-3xl border border-border bg-card p-4 shadow-card">
+            <div ref={mapSectionRef} data-testid="online-map" className="rounded-3xl border border-border bg-card p-3 shadow-card sm:p-4">
               <div className="mb-3 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
                 <span className="h-2 w-2 rounded-full bg-success motion-safe:animate-pulse" /> Online · Looking for requests
               </div>
-              <MapboxMap className="h-[260px] w-full sm:h-[520px]" simulationArea={simulationArea} />
+              <MapboxMap className="h-[66svh] min-h-[340px] w-full sm:h-[72svh] sm:max-h-[780px]" simulationArea={simulationArea} />
+              <div data-testid="online-trip-panel">
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <Pill icon={<Navigation className="h-3.5 w-3.5" />} label="Distance" value="0.0 mi" />
+                  <Pill icon={<Clock className="h-3.5 w-3.5" />} label="Trip ETA" value="0 min" />
+                  <Pill icon={<Flag className="h-3.5 w-3.5" />} label="Arrival" value="—" />
+                </div>
+                <div data-testid="waiting-card" className="mt-8 rounded-2xl border border-primary/30 bg-primary/5 p-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <span className="waiting-dot h-2.5 w-2.5 rounded-full bg-success" aria-hidden="true" /> Waiting on request
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           </div>
 
           {/* Hours meter */}
-          <div className="rounded-3xl border border-border bg-card p-6 shadow-card">
+          <div className={cn("rounded-3xl border border-border bg-card p-6 shadow-card", showMap && "hidden")}>
             <div className="flex items-center justify-between">
               <div className="text-xs uppercase tracking-widest text-muted-foreground">Hours online this week</div>
               <div className="flex flex-wrap justify-end gap-1.5">
@@ -444,7 +482,7 @@ function OperatorDashboard() {
         </section>
 
         {/* Earnings */}
-        <section className={cn("mt-6 grid gap-6", demo ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3")}>
+        <section className={cn("mt-6 grid gap-6", demo ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3", showMap && "hidden")}>
           <KPI icon={<DollarSign className="h-4 w-4" />} label="Earnings this week" value={money(weekEarnings)} />
           <KPI icon={<TrendingUp className="h-4 w-4" />} label="Average fare" value={money(avgFare)} />
           <KPI
@@ -465,7 +503,7 @@ function OperatorDashboard() {
         </section>
 
         {/* Subscription block + recent trips */}
-        <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+        <section className={cn("mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]", showMap && "hidden")}>
           <div className="min-w-0 rounded-3xl border border-border bg-gradient-surface p-6 shadow-card">
             <div className="flex items-center justify-between">
               <div>
