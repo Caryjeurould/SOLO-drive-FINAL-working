@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { BrandText } from "@/components/BrandText";
@@ -14,7 +14,8 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
-import { DEMO_JOBS, DEMO_WEEK, DEMO_WORK_WINDOW_HOURS, useDemoState } from "@/lib/demo";
+import { DEMO_JOBS, DEMO_WEEK, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM, useDemoState } from "@/lib/demo";
+import { MapboxMap } from "@/components/MapboxMap";
 import { CsaPopup } from "@/components/CsaPopup";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import { useWeeklyTrips, useRecentTrips, computeDailyHours, computeWeeklyEarnings } from "@/hooks/useTrips";
@@ -90,6 +91,32 @@ function OperatorDashboardGated() {
   return <OperatorGate><OperatorDashboard /></OperatorGate>;
 }
 
+/** Demo "Go online" map: the area it's centred on, kept in memory only while the
+ *  demo is online (never stored, logged or sent anywhere). null center = the
+ *  website simulation's pickup (No, or no geo data). */
+type DemoArea = { center: [number, number] | null };
+let demoOnlineArea: DemoArea | null = null;
+
+/** The visitor's approximate area from the server (Vercel's IP geo headers), or null. Never the browser's GPS. */
+async function fetchApproxArea(): Promise<[number, number] | null> {
+  try {
+    const r = await fetch("/api/approx-location", { cache: "no-store", credentials: "same-origin" });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { lat?: unknown; lng?: unknown };
+    return typeof j.lat === "number" && typeof j.lng === "number" ? [j.lng, j.lat] : null;
+  } catch {
+    return null;
+  }
+}
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Scroll so `el` sits just under the sticky header. */
+function scrollUnderHeader(el: HTMLElement | null) {
+  if (!el) return;
+  const header = document.querySelector("header")?.offsetHeight ?? 0;
+  window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - header - 8), behavior: reducedMotion() ? "auto" : "smooth" });
+}
+
 function OperatorDashboard() {
   const [serviceType, setServiceType] = useState<ShiftServiceType>("both");
   const { data: activeShift, isLoading: shiftLoading } = useActiveShift();
@@ -107,7 +134,27 @@ function OperatorDashboard() {
 
   const isLoading = opLoading || tripsLoading || docsLoading || shiftLoading;
 
+  // Demo only: "Go online" first asks to use the visitor's location (for the
+  // simulation map), then shows the map under the Online card.
+  const [askLocation, setAskLocation] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [demoArea, setDemoAreaState] = useState<DemoArea | null>(() => demoOnlineArea);
+  const setDemoArea = (a: DemoArea | null) => { demoOnlineArea = a; setDemoAreaState(a); };
+  const onlineCardRef = useRef<HTMLDivElement>(null);
+  const mapSectionRef = useRef<HTMLDivElement>(null);
+  const pendingScroll = useRef<"map" | "card" | null>(null);
+
   const handleToggleOnline = () => {
+    if (isVisitor()) {
+      if (online && activeShift) {
+        setDemoArea(null);
+        pendingScroll.current = "card";
+        goOffline.mutate(activeShift.id);
+      } else if (!online) {
+        setAskLocation(true);
+      }
+      return;
+    }
     if (online && activeShift) {
       goOffline.mutate(activeShift.id);
     } else if (!online) {
@@ -116,6 +163,25 @@ function OperatorDashboard() {
   };
 
   const demo = useIsVisitor();
+  const chooseLocation = async (yes: boolean) => {
+    setLocating(true);
+    const center = yes ? await fetchApproxArea() : null;
+    setLocating(false);
+    setAskLocation(false);
+    setDemoArea({ center });
+    pendingScroll.current = "map";
+    goOnline.mutate(serviceType);
+  };
+  const showMap = demo && online && !!demoArea;
+  // Online: glide down to the map; stopped: back up to the Online card.
+  useEffect(() => {
+    if (pendingScroll.current === "map" && showMap) { pendingScroll.current = null; scrollUnderHeader(mapSectionRef.current); }
+    else if (pendingScroll.current === "card" && !online) { pendingScroll.current = null; scrollUnderHeader(onlineCardRef.current); }
+  }, [showMap, online]);
+  const simulationArea = useMemo(
+    () => (demoArea ? { center: demoArea.center, address: SIM_PICKUP_ADDRESS, zoom: SIM_ZOOM, cars: 12 } : null),
+    [demoArea],
+  );
   // Demo only: the job whose Contracted Services Agreement pop-up is open.
   const [csaJob, setCsaJob] = useState<number | null>(null);
   const closeCsa = useCallback(() => setCsaJob(null), []);
@@ -178,7 +244,8 @@ function OperatorDashboard() {
 
         {/* Go online card */}
         <section className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated">
+          <div className="flex min-w-0 flex-col gap-6">
+          <div ref={onlineCardRef} className="relative overflow-hidden rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated">
             <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-primary opacity-20 blur-3xl" />
             <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div>
@@ -265,6 +332,28 @@ function OperatorDashboard() {
               </button>
             </div>
 
+            {askLocation && !online && (
+              <div role="dialog" aria-labelledby="demo-location-ask" className="relative mt-10 rounded-2xl border border-primary/30 bg-card/95 p-4 shadow-card">
+                <p id="demo-location-ask" className="text-sm">Permission requested to use your current location for simulation purposes only</p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => chooseLocation(true)}
+                    disabled={locating}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-gradient-primary px-5 text-sm font-medium text-primary-foreground shadow-glow disabled:opacity-60"
+                  >
+                    {locating && <Loader2 className="h-4 w-4 animate-spin" />} Yes
+                  </button>
+                  <button
+                    onClick={() => chooseLocation(false)}
+                    disabled={locating}
+                    className="min-h-10 rounded-xl border border-border bg-surface px-5 text-sm hover:bg-secondary disabled:opacity-60"
+                  >
+                    No
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Guardrails */}
             <div className="relative mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Guardrail
@@ -292,6 +381,18 @@ function OperatorDashboard() {
                 value={`${docsVerified}/${docsTotal} verified`}
               />
             </div>
+          </div>
+
+          {/* Demo only, while online: the simulation map (same map, size and
+              cars as the website simulation). */}
+          {showMap && (
+            <div ref={mapSectionRef} data-testid="online-map" className="rounded-3xl border border-border bg-card p-4 shadow-card">
+              <div className="mb-3 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
+                <span className="h-2 w-2 rounded-full bg-success motion-safe:animate-pulse" /> Online · Looking for requests
+              </div>
+              <MapboxMap className="h-[260px] w-full sm:h-[520px]" simulationArea={simulationArea} />
+            </div>
+          )}
           </div>
 
           {/* Hours meter */}

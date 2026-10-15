@@ -24,6 +24,12 @@ type Props = {
    *  into a much more zoomed-out fit just because the container is shorter.
    *  Also accepts per-side values (e.g. extra bottom room for the Mapbox logo). */
   fitPadding?: number | { top: number; right: number; bottom: number; left: number };
+  /** Operator demo, "Go online": centre on `center` (or, when null, on the
+   *  geocoded `address`) at `zoom`, hide every label (places, POIs, house
+   *  numbers), and draw the visitor's own car there (larger, softly pulsing)
+   *  with `cars` simulated SOLO.drive cars moving slowly along the roads the
+   *  map draws. Unset everywhere else, so other maps are unchanged. */
+  simulationArea?: { center: [number, number] | null; address: string; zoom: number; cars: number } | null;
 };
 
 const ENV_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string) || "";
@@ -94,6 +100,44 @@ async function loadMapboxGL(token: string): Promise<any> {
   return w.mapboxgl;
 }
 
+const carSvg = (stroke: string, size: number) => `
+  <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 17h-2a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h1l2 -4a2 2 0 0 1 1.8 -1h6.4a2 2 0 0 1 1.8 1l2 4h1a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-2"></path>
+    <circle cx="7" cy="17" r="2"></circle>
+    <circle cx="17" cy="17" r="2"></circle>
+    <path d="M9 17h6"></path>
+  </svg>
+`;
+
+/** The nearby-car marker the website simulation draws (grey disc, white car). */
+function nearbyCarEl(): HTMLDivElement {
+  const el = document.createElement("div");
+  el.style.cssText = "width:22px;height:22px;border-radius:9999px;background:#475569;display:flex;align-items:center;justify-content:center;box-shadow:0 0 8px rgba(71,85,105,0.7);border:1.5px solid rgba(255,255,255,0.35);";
+  el.innerHTML = carSvg("#e2e8f0", 13);
+  return el;
+}
+
+/** The demo's soft pulse for the visitor's own car (none with reduced motion). */
+function ensureSimCSS() {
+  if (document.getElementById("mb-sim-css")) return;
+  const el = document.createElement("style");
+  el.id = "mb-sim-css";
+  el.textContent = `
+    @keyframes mb-soft-ring { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(1.9); opacity: 0; } }
+    .mb-soft-ring { animation: mb-soft-ring 2.4s ease-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .mb-soft-ring { animation: none; opacity: .3; } }
+  `;
+  document.head.appendChild(el);
+}
+
+/** Road line layers of the style (the lines the map draws), minus casings, paths, rail, etc. */
+function roadLayerIds(map: any): string[] {
+  return (map.getStyle()?.layers ?? [])
+    .filter((l: any) => l.type === "line" && l["source-layer"] === "road" &&
+      !/case|path|pedestrian|steps|rail|ferry|construction|service|track|golf|aerialway|turning/.test(l.id))
+    .map((l: any) => l.id);
+}
+
 function ensureDriverCSS() {
   if (document.getElementById("mb-driver-css")) return;
   const el = document.createElement("style");
@@ -116,6 +160,7 @@ export function MapboxMap({
   nearbyDriversSeed = null,
   onlyConfirmedDriver = false,
   fitPadding = 64,
+  simulationArea = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -151,6 +196,8 @@ export function MapboxMap({
   const [tokenInput, setTokenInput] = useState("");
   const [geocoding, setGeocoding] = useState(false);
   const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
+  const simulationRef = useRef(simulationArea);
+  simulationRef.current = simulationArea;
 
   // ── 1. Initialize map ────────────────────────────────────────────────────
   useEffect(() => {
@@ -193,6 +240,13 @@ export function MapboxMap({
             layout: { "line-cap": "round", "line-join": "round" },
             paint: { "line-color": "#7c5cff", "line-width": 4, "line-opacity": 0.9 },
           });
+          // Demo Go-online map: no labels at all (place names, restaurants and
+          // other POIs, road names, house numbers are all symbol layers).
+          if (simulationRef.current) {
+            for (const l of map.getStyle().layers ?? []) {
+              if (l.type === "symbol") map.setLayoutProperty(l.id, "visibility", "none");
+            }
+          }
           mapReadyRef.current = true;
           // A route that arrived before the map finished loading draws now.
           flushPendingApply();
@@ -378,20 +432,9 @@ export function MapboxMap({
       return [pickup[0] + Math.cos(angle) * dist, pickup[1] + Math.sin(angle) * dist];
     };
 
-    const carSvg = (stroke: string, size: number) => `
-      <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M5 17h-2a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h1l2 -4a2 2 0 0 1 1.8 -1h6.4a2 2 0 0 1 1.8 1l2 4h1a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-2"></path>
-        <circle cx="7" cy="17" r="2"></circle>
-        <circle cx="17" cy="17" r="2"></circle>
-        <path d="M9 17h6"></path>
-      </svg>
-    `;
-
     if (!onlyConfirmedDriver) {
       for (let i = 0; i < 3; i++) {
-        const el = document.createElement("div");
-        el.style.cssText = "width:22px;height:22px;border-radius:9999px;background:#475569;display:flex;align-items:center;justify-content:center;box-shadow:0 0 8px rgba(71,85,105,0.7);border:1.5px solid rgba(255,255,255,0.35);";
-        el.innerHTML = carSvg("#e2e8f0", 13);
+        const el = nearbyCarEl();
         nearbyMarkersRef.current.push(
           new mapboxgl.Marker({ element: el })
             .setLngLat(offsetPoint(0.006, 0.015))
@@ -428,6 +471,121 @@ export function MapboxMap({
     nearbyMarkersRef.current.forEach((m) => m.remove());
     nearbyMarkersRef.current = [];
   }, [pickupAddress, dropoffAddress]);
+
+  // ── 6. Demo Go-online area: own car + cars driving along the drawn roads ──
+  const simLng = simulationArea?.center?.[0] ?? null;
+  const simLat = simulationArea?.center?.[1] ?? null;
+  const simAddress = simulationArea?.address ?? null;
+  const simZoom = simulationArea?.zoom ?? null;
+  const simCars = simulationArea?.cars ?? 0;
+  useEffect(() => {
+    if (simAddress == null || simZoom == null || !token) return;
+    let cancelled = false;
+    let raf = 0;
+    const markers: any[] = [];
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    ensureSimCSS();
+
+    (async () => {
+      while (!cancelled && !mapReadyRef.current) await new Promise((r) => setTimeout(r, 100));
+      const map = mapRef.current;
+      const mapboxgl = (window as any).mapboxgl;
+      if (cancelled || !map || !mapboxgl) return;
+      const center: [number, number] =
+        simLng != null && simLat != null ? [simLng, simLat] : (await mbGeocode(simAddress, token)) ?? DEFAULT_CENTER;
+      if (cancelled) return;
+      map.jumpTo({ center, zoom: simZoom });
+      await new Promise<void>((r) => map.once("idle", () => r()));
+      if (cancelled) return;
+
+      // The visitor's own car: larger, with a softly pulsing ring.
+      const self = document.createElement("div");
+      self.dataset.testid = "sim-self-car";
+      self.style.cssText = "position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center";
+      self.innerHTML = `
+        <div class="mb-soft-ring" style="position:absolute;inset:0;border-radius:9999px;background:rgba(124,92,255,0.45)"></div>
+        <div style="position:relative;width:34px;height:34px;border-radius:9999px;background:#7c5cff;border:2px solid white;box-shadow:0 0 16px rgba(124,92,255,0.9);display:flex;align-items:center;justify-content:center;">
+          ${carSvg("#ffffff", 20)}
+        </div>
+      `;
+
+      // Road lines drawn on screen, in pixels, cut to the visible map (with a margin).
+      const layers = roadLayerIds(map);
+      const feats = layers.length ? map.queryRenderedFeatures({ layers }) : [];
+      const { clientWidth: W, clientHeight: H } = map.getContainer();
+      const M = 14;
+      type Line = { pts: { x: number; y: number }[]; cum: number[]; total: number };
+      const lines: Line[] = [];
+      const pushRun = (run: { x: number; y: number }[]) => {
+        if (run.length < 2) return;
+        const cum = [0];
+        for (let i = 1; i < run.length; i++) cum.push(cum[i - 1] + Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y));
+        if (cum[cum.length - 1] >= 40) lines.push({ pts: run, cum, total: cum[cum.length - 1] });
+      };
+      for (const f of feats) {
+        const g = f.geometry;
+        const parts: [number, number][][] = g.type === "LineString" ? [g.coordinates] : g.type === "MultiLineString" ? g.coordinates : [];
+        for (const part of parts) {
+          let run: { x: number; y: number }[] = [];
+          for (const c of part) {
+            const q = map.project(c);
+            if (q.x >= M && q.x <= W - M && q.y >= M && q.y <= H - M) run.push({ x: q.x, y: q.y });
+            else { pushRun(run); run = []; }
+          }
+          pushRun(run);
+        }
+      }
+
+      const at = (l: Line, d: number) => {
+        let i = 1;
+        while (i < l.cum.length - 1 && l.cum[i] < d) i++;
+        const a = l.pts[i - 1], b = l.pts[i];
+        const t = (d - l.cum[i - 1]) / Math.max(1e-6, l.cum[i] - l.cum[i - 1]);
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      };
+
+      // Spread the cars over different roads (longest first, then shuffled), never on the visitor's car.
+      const pool = lines.sort((a, b) => b.total - a.total).slice(0, Math.max(simCars * 2, 24));
+      for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+      const mid = map.project(center);
+      const cars: { m: any; l: Line; d: number; dir: number; v: number }[] = [];
+      for (let k = 0; pool.length && cars.length < simCars && k < simCars * 8; k++) {
+        const l = pool[k % pool.length];
+        const d = Math.random() * l.total;
+        const q = at(l, d);
+        if (Math.hypot(q.x - mid.x, q.y - mid.y) < 28) continue;
+        if (cars.some((c) => { const o = at(c.l, c.d); return Math.hypot(o.x - q.x, o.y - q.y) < 24; })) continue;
+        const el = nearbyCarEl();
+        el.dataset.testid = "sim-car";
+        const m = new mapboxgl.Marker({ element: el }).setLngLat(map.unproject([q.x, q.y])).addTo(map);
+        markers.push(m);
+        cars.push({ m, l, d, dir: Math.random() < 0.5 ? 1 : -1, v: 4 + Math.random() * 4 }); // px per second: slow
+      }
+      markers.push(new mapboxgl.Marker({ element: self }).setLngLat(center).addTo(map)); // added last, drawn on top
+
+      if (still || !cars.length) return; // reduced motion: cars stay still
+      let last = performance.now();
+      const tick = (now: number) => {
+        const dt = Math.min(0.1, (now - last) / 1000);
+        last = now;
+        for (const c of cars) {
+          c.d += c.dir * c.v * dt;
+          if (c.d <= 0) { c.d = 0; c.dir = 1; }
+          if (c.d >= c.l.total) { c.d = c.l.total; c.dir = -1; }
+          const q = at(c.l, c.d);
+          c.m.setLngLat(map.unproject([q.x, q.y]));
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    })();
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      markers.forEach((m) => m.remove());
+    };
+  }, [simLng, simLat, simAddress, simZoom, simCars, token]);
 
   // ── No-token placeholder ─────────────────────────────────────────────────
   if (!token) {

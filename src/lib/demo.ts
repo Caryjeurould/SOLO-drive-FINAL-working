@@ -57,6 +57,13 @@ export function demoDocNames(first?: string, last?: string) {
   return { first: f, last: l, full: `${f} ${l}`, entity: `${l} Transports - PHX LLC`, coSigner: `Cheryl ${l}` };
 }
 
+/** The website simulation's pickup (its Book-A-Ride card and /customer start
+ *  here). The Operator demo's Go-online map falls back to the same spot. */
+export const SIM_PICKUP_ADDRESS = "1333 Camelback Rd, Phoenix, AZ";
+/** The Go-online map's zoom: the website simulation's map at full size (it
+ *  frames a whole route, so on phones it ends up wider, ~9.4). */
+export const SIM_ZOOM = 11;
+
 /** The website's Customer booking card: the sample Operator shown when no real
  *  Operator comes back from the database (always, for visitors, whose database
  *  connection is switched off). Built from DEMO_DOCS; all documents verified. */

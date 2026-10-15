@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
 import { BrandText } from "@/components/BrandText";
-import { SAMPLE_FEATURED_OPERATOR } from "@/lib/demo";
+import { SAMPLE_FEATURED_OPERATOR, SIM_PICKUP_ADDRESS } from "@/lib/demo";
 import { isVisitor } from "@/lib/site-role";
 import {
   MapPin, Navigation, Clock, ShieldCheck, Sparkles, ArrowRight,
@@ -152,7 +152,7 @@ export function SmartRateBooking({
   onVerifyClose,
   ctaAttention = false,
 }: SmartRateBookingProps) {
-  const [pickup, setPickup] = useState("1333 Camelback Rd, Phoenix, AZ");
+  const [pickup, setPickup] = useState(SIM_PICKUP_ADDRESS);
   const [dropoff, setDropoff] = useState("14765 Scottsdale Rd, Scottsdale, AZ");
   const [event, setEvent] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
