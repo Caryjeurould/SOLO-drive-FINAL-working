@@ -30,6 +30,9 @@ type Props = {
    *  with `cars` simulated SOLO.drive cars moving slowly along the roads the
    *  map draws. Unset everywhere else, so other maps are unchanged. */
   simulationArea?: { center: [number, number] | null; address: string; zoom: number; cars: number } | null;
+  /** Operator demo ride: draw the Operator's car this far (0-1) along the
+   *  pickup → drop-off route. Unset everywhere else. */
+  tripProgress?: number | null;
 };
 
 const ENV_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string) || "";
@@ -169,6 +172,7 @@ export function MapboxMap({
   onlyConfirmedDriver = false,
   fitPadding = 64,
   simulationArea = null,
+  tripProgress = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -580,8 +584,8 @@ export function MapboxMap({
         el.dataset.testid = "sim-car";
         const m = new mapboxgl.Marker({ element: el }).setLngLat(lngLatAt(l, d)).addTo(map);
         markers.push(m);
-        // Each car keeps its own pace (15-30 mph) and drifts a little (±10%) around it.
-        cars.push({ m, l, d, dir: Math.random() < 0.5 ? 1 : -1, v: mph(15 + Math.random() * 15), w: 0.2 + Math.random() * 0.3, ph: Math.random() * 6.28 });
+        // Each car keeps its own unhurried pace (60% of 15-30 mph) and drifts a little (±10%) around it.
+        cars.push({ m, l, d, dir: Math.random() < 0.5 ? 1 : -1, v: mph(0.6 * (15 + Math.random() * 15)), w: 0.2 + Math.random() * 0.3, ph: Math.random() * 6.28 });
       }
       markers.push(new mapboxgl.Marker({ element: self }).setLngLat(center).addTo(map)); // added last, drawn on top
 
@@ -610,6 +614,51 @@ export function MapboxMap({
       markers.forEach((m) => m.remove());
     };
   }, [simLng, simLat, simAddress, simZoom, simCars, token]);
+
+  // ── 7. Demo ride: the Operator's car at tripProgress along the route ──────
+  const tripMarkerRef = useRef<any>(null);
+  const routeCumRef = useRef<{ coords: [number, number][]; cum: number[] } | null>(null);
+  useEffect(() => {
+    if (tripProgress == null) {
+      tripMarkerRef.current?.remove();
+      tripMarkerRef.current = null;
+      return;
+    }
+    const map = mapRef.current;
+    const mapboxgl = (window as any).mapboxgl;
+    const coords = routeCoordsRef.current;
+    if (!map || !mapboxgl || !mapReadyRef.current || coords.length < 2) return; // placed on a later tick
+    if (routeCumRef.current?.coords !== coords) {
+      const cum = [0];
+      for (let i = 1; i < coords.length; i++) {
+        const k = Math.cos((coords[i][1] * Math.PI) / 180);
+        cum.push(cum[i - 1] + Math.hypot((coords[i][0] - coords[i - 1][0]) * k, coords[i][1] - coords[i - 1][1]));
+      }
+      routeCumRef.current = { coords, cum };
+    }
+    const { cum } = routeCumRef.current;
+    const d = Math.max(0, Math.min(1, tripProgress)) * cum[cum.length - 1];
+    let i = 1;
+    while (i < cum.length - 1 && cum[i] < d) i++;
+    const t = (d - cum[i - 1]) / Math.max(1e-12, cum[i] - cum[i - 1]);
+    const at: [number, number] = [coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t, coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t];
+    if (!tripMarkerRef.current) {
+      ensureSimCSS();
+      const el = document.createElement("div");
+      el.dataset.testid = "trip-car";
+      el.style.cssText = "position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center";
+      el.innerHTML = `
+        <div class="mb-soft-ring" style="position:absolute;inset:0;border-radius:9999px;background:rgba(124,92,255,0.45)"></div>
+        <div style="position:relative;width:19px;height:19px;border-radius:9999px;background:#7c5cff;border:1.5px solid white;box-shadow:0 0 8px rgba(124,92,255,0.9);display:flex;align-items:center;justify-content:center;">
+          ${carSvg("#ffffff", 12)}
+        </div>
+      `;
+      tripMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat(at).addTo(map);
+    } else {
+      tripMarkerRef.current.setLngLat(at);
+    }
+  }, [tripProgress]);
+  useEffect(() => () => { tripMarkerRef.current?.remove(); tripMarkerRef.current = null; }, []);
 
   // ── No-token placeholder ─────────────────────────────────────────────────
   if (!token) {

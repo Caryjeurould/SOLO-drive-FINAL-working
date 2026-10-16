@@ -61,6 +61,31 @@ export function demoDocNames(first?: string, last?: string) {
 /** The website simulation's pickup (its Book-A-Ride card and /customer start
  *  here). The Operator demo's Go-online map falls back to the same spot. */
 export const SIM_PICKUP_ADDRESS = "1333 Camelback Rd, Phoenix, AZ";
+/** The website simulation's drop-off. */
+export const SIM_DROPOFF_ADDRESS = "14765 Scottsdale Rd, Scottsdale, AZ";
+
+/** The Operator demo's one simulated ride, offered about 5 s after the
+ *  Go-online map opens: the website simulation's trip (16.6 mi / 29 min) for
+ *  Customer Linda K., at a locked $34.50 Smart+Rate™ ($4.50 base + $27.10
+ *  distance + $2.90 fuel index = $34.50, ×1.09). Timings in ms; the ride
+ *  itself is compressed into a few seconds. */
+export const DEMO_RIDE = {
+  customer: "Linda K.",
+  pickup: SIM_PICKUP_ADDRESS,
+  dropoff: SIM_DROPOFF_ADDRESS,
+  /** How far the pickup is from the Operator, and the drive there (~25 mph). */
+  pickupMi: 4.6,
+  operatorEtaMin: 11,
+  tripMi: 16.6,
+  tripMin: 29,
+  rate: { base: 4.5, distance: 27.1, fuelAdj: 2.9, peakAdj: 0, weekendAdj: 0, eventAdj: 0, total: 34.5, multiplier: 1.09 },
+  offerAfterMs: 5000,
+  autoAcceptMs: 6000,
+  /** The Contracted Services card grows and settles back (6.2 s), then the drive starts. */
+  csaMs: 6600,
+  driveMs: 13000,
+  thanksMs: 2500,
+};
 /** The Go-online map's zoom: street level (about 2 m per pixel), so cars at
  *  real city speeds (15-30 mph) visibly creep along the streets. */
 export const SIM_ZOOM = 15;

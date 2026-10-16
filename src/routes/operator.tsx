@@ -1,6 +1,6 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { BrandText } from "@/components/BrandText";
 import { OperatorGate } from "@/components/OperatorGate";
@@ -14,9 +14,10 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
-import { DEMO_JOBS, DEMO_WEEK, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM, useDemoState } from "@/lib/demo";
+import { DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM, resetDemo, useDemoState } from "@/lib/demo";
 import { MapboxMap } from "@/components/MapboxMap";
-import { Pill } from "@/components/SmartRateBooking";
+import { Pill, generatePoNumber } from "@/components/SmartRateBooking";
+import { DemoRideScreen, playChime, type RidePhase } from "@/components/DemoRide";
 import { CsaPopup } from "@/components/CsaPopup";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import {
@@ -208,6 +209,60 @@ function OperatorDashboard() {
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
   }, [showMap]);
+  // Demo only: the simulated ride. About 5 s after the online map opens a
+  // ride is offered (one soft chime); Accept (or 6 s without a tap) makes the
+  // Contracted Services Agreement; then the drive, the closing line, and the
+  // whole demo starts over at the name screen. Stop, or leaving the page,
+  // cancels whatever is pending (every timer below is cleared on cleanup).
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [ride, setRide] = useState<{ phase: RidePhase | null; acceptedAt: number | null; poNumber: string | null }>({ phase: null, acceptedAt: null, poNumber: null });
+  const [rideProgress, setRideProgress] = useState(0);
+  const rideReduced = typeof window !== "undefined" && reducedMotion();
+  useEffect(() => {
+    if (!showMap) setRide({ phase: null, acceptedAt: null, poNumber: null });
+  }, [showMap]);
+  const acceptRide = () => {
+    const first = demoState.first || "Demo", last = demoState.last || "Operator";
+    setRide({ phase: "csa", acceptedAt: Date.now(), poNumber: generatePoNumber(`${first[0]}${last[0]}`.toUpperCase()) });
+  };
+  useEffect(() => {
+    if (!showMap) return;
+    const after = (ms: number, fn: () => void) => { const t = window.setTimeout(fn, ms); return () => window.clearTimeout(t); };
+    switch (ride.phase) {
+      case null:
+        return after(DEMO_RIDE.offerAfterMs, () => { playChime(); setRide((r) => ({ ...r, phase: "offer" })); });
+      case "offer":
+        return after(DEMO_RIDE.autoAcceptMs, acceptRide);
+      case "csa":
+        return after(DEMO_RIDE.csaMs, () => { setRideProgress(0); setRide((r) => ({ ...r, phase: "drive" })); });
+      case "drive": {
+        // The car and the countdown follow the clock; with reduced motion they jump in quarter steps.
+        const start = performance.now();
+        let raf = 0;
+        const tick = () => {
+          const p = Math.min(1, (performance.now() - start) / DEMO_RIDE.driveMs);
+          setRideProgress(rideReduced && p < 1 ? Math.floor(p * 4) / 4 : p);
+          if (p >= 1) setRide((r) => ({ ...r, phase: "thanks" }));
+          else raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+      }
+      case "thanks":
+        return after(DEMO_RIDE.thanksMs, () => {
+          // Start over: back to the name screen, then forget everything (name,
+          // online session, hours, the map's area and every cached answer).
+          setDemoArea(null);
+          navigate({ to: "/operator/demo", replace: true }).then(() => {
+            resetDemo();
+            queryClient.clear();
+          });
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMap, ride.phase]);
+
   const simulationArea = useMemo(
     () => (demoArea ? { center: demoArea.center, address: SIM_PICKUP_ADDRESS, zoom: SIM_ZOOM, cars: 12 } : null),
     [demoArea],
@@ -269,6 +324,17 @@ function OperatorDashboard() {
 
   return (
     <AppShell>
+      {showMap && ride.phase ? (
+        <DemoRideScreen
+          phase={ride.phase}
+          operatorName={csaOperator}
+          acceptedAt={ride.acceptedAt}
+          poNumber={ride.poNumber}
+          progress={rideProgress}
+          reduced={rideReduced}
+          onAccept={acceptRide}
+        />
+      ) : (
       <div className="mx-auto max-w-7xl px-4 py-10 md:px-8">
         <header className={cn("flex flex-wrap items-end justify-between gap-4", showMap && "hidden")}>
           <div>
@@ -434,7 +500,14 @@ function OperatorDashboard() {
           {showMap && (
             <div ref={mapSectionRef} data-testid="online-map" className="rounded-3xl border border-border bg-card p-3 shadow-card sm:p-4">
               <div className="mb-3 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
-                <span className="h-2 w-2 rounded-full bg-success motion-safe:animate-pulse" /> Online · Looking for requests
+                <span className="h-2 w-2 rounded-full bg-success motion-safe:animate-pulse" /> Online
+                <button
+                  onClick={handleToggleOnline}
+                  disabled={goOffline.isPending}
+                  className="ml-auto inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-success/40 bg-success/15 px-3 text-xs font-semibold text-success hover:bg-success/25"
+                >
+                  <Power className="h-3.5 w-3.5" /> Stop
+                </button>
               </div>
               <div ref={mapBoxRef} style={{ height: onlineMapH ?? ONLINE_MAP_MIN_PX }}>
                 <MapboxMap className="h-full w-full" simulationArea={simulationArea} />
@@ -622,6 +695,7 @@ function OperatorDashboard() {
           </div>
         </section>
       </div>
+      )}
 
       {demo && csaJob != null && DEMO_JOBS[csaJob] && (
         <CsaPopup job={DEMO_JOBS[csaJob]} operator={csaOperator} onClose={closeCsa} />

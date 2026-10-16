@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { DOCUMENT_REQUIREMENTS } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
 import { BrandText } from "@/components/BrandText";
-import { SAMPLE_FEATURED_OPERATOR, SIM_PICKUP_ADDRESS } from "@/lib/demo";
+import { SAMPLE_FEATURED_OPERATOR, SIM_DROPOFF_ADDRESS, SIM_PICKUP_ADDRESS } from "@/lib/demo";
 import { isVisitor } from "@/lib/site-role";
 import {
   MapPin, Navigation, Clock, ShieldCheck, Sparkles, ArrowRight,
@@ -91,12 +91,12 @@ function randomLetters(n: number) {
   return Array.from({ length: n }, () => PO_LETTERS[Math.floor(Math.random() * PO_LETTERS.length)]).join("");
 }
 
-function generatePoNumber(initials: string) {
+export function generatePoNumber(initials: string) {
   return `${initials}-${randomDigits(4)}${randomLetters(2)}-${randomDigits(4)}`;
 }
 
 /** "11:55 AM" */
-function formatTime(ms: number) {
+export function formatTime(ms: number) {
   return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 /** The Smart Rate shown everywhere this component renders: fixed figures,
@@ -153,7 +153,7 @@ export function SmartRateBooking({
   ctaAttention = false,
 }: SmartRateBookingProps) {
   const [pickup, setPickup] = useState(SIM_PICKUP_ADDRESS);
-  const [dropoff, setDropoff] = useState("14765 Scottsdale Rd, Scottsdale, AZ");
+  const [dropoff, setDropoff] = useState(SIM_DROPOFF_ADDRESS);
   const [event, setEvent] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   // "intro" layout: the Verify button pulses until the popup has been opened once.
@@ -458,9 +458,7 @@ export function SmartRateBooking({
     setNearbyDriversSeed(at); // fresh arrangement on every confirm, as before
   };
 
-  const csaText = `Customer Marie C. and Operator Marcus R. entered into a Contracted Svs Agreement (CSA) for `
-    + `transportation/delivery from the marked pick-up, drop-off, and/or delivery location(s) specified in the `
-    + `"Where To" for the agreed upon $${rate.total.toFixed(2)} Smart+Rate™ price.`;
+  const csaText = csaAgreementText("Marie C.", "Marcus R.", rate.total);
 
   const mapBlock = (
     <div>
@@ -498,10 +496,10 @@ export function SmartRateBooking({
         />
       </div>
 
-      <div
-        ref={csaRef}
+      <ContractedServicesCard
+        cardRef={csaRef}
         className={cn(
-          "mt-8 scroll-mb-6 scroll-mt-24 rounded-2xl border border-primary/30 bg-primary/5 p-3",
+          "mt-8 scroll-mb-6 scroll-mt-24",
           // Above its neighbors only while magnified; afterwards the classes
           // drop off and the box is exactly as before.
           csaMagnify && csaMagnify.at === confirmation?.at && "animate-csa-magnify relative z-10",
@@ -512,29 +510,9 @@ export function SmartRateBooking({
         onAnimationEnd={(e) => {
           if (e.target === e.currentTarget) setCsaMagnify(null);
         }}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-glow">
-            <FileSignature className="h-3 w-3" /> Contracted Services
-          </div>
-          {confirmation && (
-            <div className="font-mono text-xs text-muted-foreground">[#{confirmation.poNumber}]</div>
-          )}
-        </div>
-
-        {confirmation && (
-          <>
-            <p className="mt-1.5 min-h-[5em] text-xs leading-snug text-muted-foreground">
-              <TypewriterText text={csaText} replayKey={confirmation.at} />
-            </p>
-            <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              Operator ETA to pickup:{" "}
-              <span className="font-semibold text-success">{confirmation.operatorEtaMin} min</span>
-            </div>
-          </>
-        )}
-      </div>
+        confirmation={confirmation}
+        text={csaText}
+      />
     </div>
   );
 
@@ -676,7 +654,7 @@ function Field({ icon, value, onChange, label }: { icon: React.ReactNode; value:
 /** Read-only twin of Field for the "intro" card: same box, label, and icons,
  *  but plain text that wraps instead of an input, so full addresses fit at
  *  phone width. */
-function DisplayField({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+export function DisplayField({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
       <div className="flex h-6 w-6 shrink-0 items-center justify-center">{icon}</div>
@@ -699,7 +677,60 @@ export function Pill({ icon, label, value, valueClassName }: { icon: React.React
   );
 }
 
-function Row({ k, v }: { k: string; v: string }) {
+/** The Contracted Services Agreement sentence (the website's, and the Operator demo's ride). */
+export function csaAgreementText(customer: string, operator: string, total: number) {
+  return `Customer ${customer} and Operator ${operator} entered into a Contracted Services Agreement (CSA) for `
+    + `transportation/delivery from the marked pick-up, drop-off, and/or delivery location(s) specified in the `
+    + `"Where To" for the agreed upon $${total.toFixed(2)} Smart+Rate™ price.`;
+}
+
+/** The trip screen's Contracted Services card: the reference # and the
+ *  agreement typed out once a ride is confirmed. The caller sizes, places and
+ *  magnifies it (the website after Confirm ride, the Operator demo after Accept). */
+export function ContractedServicesCard({
+  cardRef, className, style, onAnimationEnd, confirmation, text,
+}: {
+  cardRef?: React.Ref<HTMLDivElement>;
+  className?: string;
+  style?: React.CSSProperties;
+  onAnimationEnd?: React.AnimationEventHandler<HTMLDivElement>;
+  confirmation: { at: number; poNumber: string; operatorEtaMin: number } | null;
+  text: string;
+}) {
+  return (
+    <div
+      ref={cardRef}
+      data-testid="csa-card"
+      className={cn("rounded-2xl border border-primary/30 bg-primary/5 p-3", className)}
+      style={style}
+      onAnimationEnd={onAnimationEnd}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-glow">
+          <FileSignature className="h-3 w-3" /> Contracted Services
+        </div>
+        {confirmation && (
+          <div className="font-mono text-xs text-muted-foreground">[#{confirmation.poNumber}]</div>
+        )}
+      </div>
+
+      {confirmation && (
+        <>
+          <p className="mt-1.5 min-h-[5em] text-xs leading-snug text-muted-foreground">
+            <TypewriterText text={text} replayKey={confirmation.at} />
+          </p>
+          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            Operator ETA to pickup:{" "}
+            <span className="font-semibold text-success">{confirmation.operatorEtaMin} min</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function Row({ k, v }: { k: string; v: string }) {
   return <><span>{k}</span><span className="text-right text-foreground/80">{v}</span></>;
 }
 
