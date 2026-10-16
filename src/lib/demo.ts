@@ -83,9 +83,17 @@ export const DEMO_RIDE = {
   autoAcceptMs: 6000,
   /** The Contracted Services card grows and settles back (6.2 s), then the drive starts. */
   csaMs: 6600,
+  /** The drive in the "classic" view (map + Distance / Trip ETA / Arrival rows). */
   driveMs: 13000,
+  /** The drive in the "guidance" view (turn-by-turn navigation screen). */
+  guidanceDriveMs: 20000,
   thanksMs: 2500,
 };
+/** Which drive screen the demo ride shows after the Contracted Services card:
+ *  "guidance" = full-screen navigation (tilted map following the car, turn
+ *  card, time / miles / arrival card); "classic" = the route map with the
+ *  Distance / Trip ETA / Arrival rows. Flip this one value to compare. */
+export const DRIVE_VIEW: "guidance" | "classic" = "guidance";
 /** The Go-online map's zoom: street level (about 2 m per pixel), so cars at
  *  real city speeds (15-30 mph) visibly creep along the streets. */
 export const SIM_ZOOM = 15;

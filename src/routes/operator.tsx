@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
-import { DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM, resetDemo, useDemoState } from "@/lib/demo";
+import { DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DRIVE_VIEW, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM, resetDemo, useDemoState } from "@/lib/demo";
 import { MapboxMap } from "@/components/MapboxMap";
 import { Pill, generatePoNumber } from "@/components/SmartRateBooking";
 import { DemoRideScreen, playChime, type RidePhase } from "@/components/DemoRide";
@@ -241,7 +241,7 @@ function OperatorDashboard() {
         const start = performance.now();
         let raf = 0;
         const tick = () => {
-          const p = Math.min(1, (performance.now() - start) / DEMO_RIDE.driveMs);
+          const p = Math.min(1, (performance.now() - start) / (DRIVE_VIEW === "guidance" ? DEMO_RIDE.guidanceDriveMs : DEMO_RIDE.driveMs));
           setRideProgress(rideReduced && p < 1 ? Math.floor(p * 4) / 4 : p);
           if (p >= 1) setRide((r) => ({ ...r, phase: "thanks" }));
           else raf = requestAnimationFrame(tick);

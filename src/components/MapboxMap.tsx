@@ -33,7 +33,26 @@ type Props = {
   /** Operator demo ride: draw the Operator's car this far (0-1) along the
    *  pickup → drop-off route. Unset everywhere else. */
   tripProgress?: number | null;
+  /** Operator demo ride, "guidance" view: when given, the Directions request
+   *  also asks for the turn-by-turn steps and reports them here. Unset
+   *  everywhere else, so other maps make the same request as before. */
+  onRouteSteps?: (steps: RouteStep[]) => void;
+  /** Operator demo ride, "guidance" view: while `tripProgress` is set, the
+   *  camera follows the car tilted (~60°), turned so the road ahead points up,
+   *  with the car `bottomPx` above the map's bottom edge, drawn as a top-down
+   *  car. `reduced`: no tilt/glide, instant turns. Unset everywhere else. */
+  driveView?: { bottomPx: number; reduced: boolean } | null;
 };
+
+/** One Mapbox Directions step: the maneuver at its start, the road it follows,
+ *  and where it starts as a fraction (0-1) of the whole route. */
+export type RouteStep = { type: string; modifier: string; name: string; ref: string; startFrac: number };
+
+/** The guidance view's camera: street level, tilted like a driver's view. */
+const DRIVE_ZOOM = 14;
+const DRIVE_PITCH = 60;
+/** The tilt and glide from the route overview into the driver's view. */
+const DRIVE_INTRO_MS = 1500;
 
 const ENV_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string) || "";
 const DEFAULT_CENTER: [number, number] = [-112.0740, 33.4484];
@@ -52,18 +71,28 @@ async function mbGeocode(query: string, token: string): Promise<[number, number]
   }
 }
 
-async function mbDirections(a: [number, number], b: [number, number], token: string) {
+async function mbDirections(a: [number, number], b: [number, number], token: string, withSteps = false) {
   try {
     const r = await fetch(
-      `https://api.mapbox.com/directions/v5/mapbox/driving/${a[0]},${a[1]};${b[0]},${b[1]}?access_token=${token}&geometries=geojson&overview=full`,
+      `https://api.mapbox.com/directions/v5/mapbox/driving/${a[0]},${a[1]};${b[0]},${b[1]}?access_token=${token}&geometries=geojson&overview=full${withSteps ? "&steps=true" : ""}`,
     );
     const j = await r.json();
     const route = j.routes?.[0];
     if (!route) return null;
+    let steps: RouteStep[] = [];
+    if (withSteps) {
+      let at = 0;
+      steps = (route.legs?.[0]?.steps ?? []).map((s: any) => {
+        const step = { type: s.maneuver?.type ?? "", modifier: s.maneuver?.modifier ?? "", name: s.name ?? "", ref: s.ref ?? "", startFrac: at / route.distance };
+        at += s.distance;
+        return step;
+      });
+    }
     return {
       coords: route.geometry.coordinates as [number, number][],
       distanceMi: route.distance / 1609.34,
       durationMin: route.duration / 60,
+      steps,
     };
   } catch {
     return null;
@@ -128,6 +157,23 @@ function simCarEl(): HTMLDivElement {
   return el;
 }
 
+/** The demo ride's guidance view: the Operator's car from above (front up) —
+ *  rounded hood, windshield, roof, rear window — in the Operator car's purple.
+ *  Laid flat on the map, so the tilted camera sees it from behind. */
+function topDownCarEl(): HTMLDivElement {
+  const el = document.createElement("div");
+  el.dataset.testid = "trip-car";
+  el.style.cssText = "width:40px;height:72px";
+  el.innerHTML = `
+    <svg width="40" height="72" viewBox="0 0 30 54" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 15 C3 5 8 1.5 15 1.5 C22 1.5 27 5 27 15 L27 46 C27 50.5 24.5 52.5 20 52.5 L10 52.5 C5.5 52.5 3 50.5 3 46 Z" fill="#7c5cff" stroke="#ffffff" stroke-width="1.5"/>
+      <path d="M6 19.5 C11 16.5 19 16.5 24 19.5 L22.5 26.5 C18 25 12 25 7.5 26.5 Z" fill="#1e1b4b" fill-opacity="0.9"/>
+      <rect x="7.5" y="27.5" width="15" height="14" rx="3" fill="#7c5cff" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1"/>
+      <path d="M8 43.5 C12 44.8 18 44.8 22 43.5 L21 48 C17.5 49 12.5 49 9 48 Z" fill="#1e1b4b" fill-opacity="0.9"/>
+    </svg>`;
+  return el;
+}
+
 /** The demo's soft pulse for the visitor's own car (none with reduced motion). */
 function ensureSimCSS() {
   if (document.getElementById("mb-sim-css")) return;
@@ -173,6 +219,8 @@ export function MapboxMap({
   fitPadding = 64,
   simulationArea = null,
   tripProgress = null,
+  onRouteSteps,
+  driveView = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -186,6 +234,8 @@ export function MapboxMap({
   const drawnForSeedRef = useRef<number | null>(null);
   const onRouteDataRef = useRef(onRouteData);
   onRouteDataRef.current = onRouteData;
+  const onRouteStepsRef = useRef(onRouteSteps);
+  onRouteStepsRef.current = onRouteSteps;
   // The route lookup and the map's own load race each other. The latest
   // "draw markers + route line + fit" step waits here until the map is ready
   // (its "load" handler has added the route layer), then runs exactly once —
@@ -295,7 +345,7 @@ export function MapboxMap({
         if (cancelled || !pickup || !dropoff) return;
         setPickupCoords(pickup);
 
-        const route = await mbDirections(pickup, dropoff, token);
+        const route = await mbDirections(pickup, dropoff, token, !!onRouteStepsRef.current);
         if (cancelled) return;
 
         if (route) {
@@ -304,6 +354,7 @@ export function MapboxMap({
             distanceMi: route.distanceMi,
             durationMin: route.durationMin,
           });
+          onRouteStepsRef.current?.(route.steps);
         }
 
         const applyToMap = () => {
@@ -618,10 +669,16 @@ export function MapboxMap({
   // ── 7. Demo ride: the Operator's car at tripProgress along the route ──────
   const tripMarkerRef = useRef<any>(null);
   const routeCumRef = useRef<{ coords: [number, number][]; cum: number[] } | null>(null);
+  // Guidance view: where the camera started (for the tilt-in) and the eased heading.
+  const driveCamRef = useRef<{ t0: number; last: number; heading: number; from: { zoom: number; bearing: number; pitch: number } } | null>(null);
+  const driveOn = driveView != null;
+  const driveBottom = driveView?.bottomPx ?? 0;
+  const driveReduced = driveView?.reduced ?? false;
   useEffect(() => {
     if (tripProgress == null) {
       tripMarkerRef.current?.remove();
       tripMarkerRef.current = null;
+      driveCamRef.current = null;
       return;
     }
     const map = mapRef.current;
@@ -637,11 +694,53 @@ export function MapboxMap({
       routeCumRef.current = { coords, cum };
     }
     const { cum } = routeCumRef.current;
-    const d = Math.max(0, Math.min(1, tripProgress)) * cum[cum.length - 1];
-    let i = 1;
-    while (i < cum.length - 1 && cum[i] < d) i++;
-    const t = (d - cum[i - 1]) / Math.max(1e-12, cum[i] - cum[i - 1]);
-    const at: [number, number] = [coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t, coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t];
+    const total = cum[cum.length - 1];
+    const pointAt = (dd: number): [number, number] => {
+      let i = 1;
+      while (i < cum.length - 1 && cum[i] < dd) i++;
+      const t = (dd - cum[i - 1]) / Math.max(1e-12, cum[i] - cum[i - 1]);
+      return [coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t, coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t];
+    };
+    const d = Math.max(0, Math.min(1, tripProgress)) * total;
+    const at = pointAt(d);
+    if (driveOn) {
+      // The heading: toward the route ~300 m ahead (cum is in degrees of latitude).
+      const look = 300 / 111_320;
+      const [p0, p1] = d + look <= total ? [at, pointAt(d + look)] : [pointAt(Math.max(0, total - look)), pointAt(total)];
+      const heading = (Math.atan2((p1[0] - p0[0]) * Math.cos((p0[1] * Math.PI) / 180), p1[1] - p0[1]) * 180) / Math.PI;
+      const turn = (a: number, b: number) => ((((b - a) % 360) + 540) % 360) - 180; // shortest a → b
+      const now = performance.now();
+      let cam = driveCamRef.current;
+      if (!cam) {
+        map.resize(); // the map just became full screen
+        if (map.getLayer("route")) map.setPaintProperty("route", "line-width", 9);
+        cam = driveCamRef.current = { t0: now, last: now, heading, from: { zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() } };
+      } else {
+        // The map turns smoothly into each new road (instantly with reduced motion).
+        const k = driveReduced ? 1 : 1 - Math.exp(-(now - cam.last) / 350);
+        cam.heading += turn(cam.heading, heading) * k;
+        cam.last = now;
+      }
+      // The car stays put on the screen from the first frame; the map zooms,
+      // tilts and turns in around it (all at once with reduced motion).
+      const x = driveReduced ? 1 : Math.min(1, (now - cam.t0) / DRIVE_INTRO_MS);
+      const e = x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2; // ease in-out
+      const { from } = cam;
+      const H = map.getContainer().clientHeight;
+      map.jumpTo({
+        center: at,
+        zoom: from.zoom + (DRIVE_ZOOM - from.zoom) * e,
+        bearing: from.bearing + turn(from.bearing, cam.heading) * e,
+        pitch: from.pitch + (DRIVE_PITCH - from.pitch) * e,
+        // The car sits low on the screen: bottomPx above the bottom edge.
+        padding: { top: Math.max(0, H - 2 * driveBottom), bottom: 0, left: 0, right: 0 },
+      });
+      if (!tripMarkerRef.current) {
+        tripMarkerRef.current = new mapboxgl.Marker({ element: topDownCarEl(), rotationAlignment: "map", pitchAlignment: "map" }).setLngLat(at).addTo(map);
+      }
+      tripMarkerRef.current.setLngLat(at).setRotation(cam.heading);
+      return;
+    }
     if (!tripMarkerRef.current) {
       ensureSimCSS();
       const el = document.createElement("div");
@@ -657,7 +756,7 @@ export function MapboxMap({
     } else {
       tripMarkerRef.current.setLngLat(at);
     }
-  }, [tripProgress]);
+  }, [tripProgress, driveOn, driveBottom, driveReduced]);
   useEffect(() => () => { tripMarkerRef.current?.remove(); tripMarkerRef.current = null; }, []);
 
   // ── No-token placeholder ─────────────────────────────────────────────────
