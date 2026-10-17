@@ -12,27 +12,28 @@ import { cn } from "@/lib/utils";
 
 export type RidePhase = "offer" | "csa" | "drive" | "thanks";
 
-/** One short, soft two-note chime made with Web Audio (no audio file). Silent if audio isn't available. */
+/** Two short, soft beeps with a short gap, made with Web Audio (no audio file). Silent if audio isn't available or is blocked. */
 export function playChime() {
   try {
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
     const now = ctx.currentTime;
-    const gain = ctx.createGain();
-    gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.08, now + 0.03);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-    for (const [freq, at] of [[880, 0], [1318.5, 0.12]] as const) {
+    // Two soft beeps (0.18 s each) with a short gap.
+    for (const at of [0, 0.32]) {
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.0001, now + at);
+      gain.gain.exponentialRampToValueAtTime(0.07, now + at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.18);
       const osc = ctx.createOscillator();
       osc.type = "sine";
-      osc.frequency.value = freq;
+      osc.frequency.value = 988;
       osc.connect(gain);
       osc.start(now + at);
-      osc.stop(now + 0.95);
+      osc.stop(now + at + 0.2);
     }
-    window.setTimeout(() => { ctx.close().catch(() => {}); }, 1200);
+    window.setTimeout(() => { ctx.close().catch(() => {}); }, 900);
   } catch {
     // No sound; the offer still shows.
   }

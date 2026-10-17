@@ -9,12 +9,15 @@ import { PostTripReportPrompt } from "@/components/PostTripReportPrompt";
 import { PanicButton } from "@/components/PanicButton";
 import {
   Power, Clock, CalendarCheck, AlertTriangle, FileLock2, ShieldCheck,
-  TrendingUp, DollarSign, CheckCircle2, FileText, ArrowRight, Loader2, MapPin, Navigation, Flag,
+  TrendingUp, DollarSign, CheckCircle2, FileText, ArrowRight, ArrowLeft, Loader2, MapPin, Navigation, Flag, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
-import { DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DRIVE_VIEW, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM, resetDemo, useDemoState } from "@/lib/demo";
+import {
+  DEMO_ACCESS_FEE, DEMO_DOCS, DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DRIVE_VIEW, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM,
+  demoBillingCycle, demoDate, markDemoGlidedBack, resetDemo, useDemoState,
+} from "@/lib/demo";
 import { MapboxMap } from "@/components/MapboxMap";
 import { Pill, generatePoNumber } from "@/components/SmartRateBooking";
 import { DemoRideScreen, playChime, type RidePhase } from "@/components/DemoRide";
@@ -164,6 +167,7 @@ function OperatorDashboard() {
   };
   const handleToggleOnline = () => {
     if (isVisitor()) {
+      setGoFlash(false);
       if (online && activeShift) {
         stopDemo(activeShift.id);
       } else if (!online) {
@@ -210,7 +214,7 @@ function OperatorDashboard() {
     return () => window.removeEventListener("resize", fit);
   }, [showMap]);
   // Demo only: the simulated ride. About 5 s after the online map opens a
-  // ride is offered (one soft chime); Accept (or 6 s without a tap) makes the
+  // ride is offered (two soft beeps); Accept (or 6 s without a tap) makes the
   // Contracted Services Agreement; then the drive, the closing line, and the
   // whole demo starts over at the name screen. Stop, or leaving the page,
   // cancels whatever is pending (every timer below is cleared on cleanup).
@@ -272,6 +276,51 @@ function OperatorDashboard() {
   const closeCsa = useCallback(() => setCsaJob(null), []);
   const demoState = useDemoState();
   const csaOperator = demoState.first ? `${demoState.first} ${(demoState.last || "O")[0]}.` : "Demo O.";
+  // Demo only: the in-demo payments screen behind "Manage billing" (nothing stored).
+  const [billingOpen, setBillingOpen] = useState(false);
+  const billingCardRef = useRef<HTMLDivElement>(null);
+  const openBilling = () => { setBillingOpen(true); window.scrollTo({ top: 0 }); };
+  const closeBilling = () => { setBillingOpen(false); requestAnimationFrame(() => billingCardRef.current?.scrollIntoView({ block: "center" })); };
+  // Demo only: once the visitor has reached the bottom of the dashboard and
+  // nothing has moved (no scroll, no touch) for 3 s, glide back up to Go online,
+  // which then flashes. An open Contracted Services pop-up or the payments
+  // screen holds it (the 3 s start again after). Once per run; with reduced
+  // motion there is no glide, only the flash.
+  const [goFlash, setGoFlash] = useState(false);
+  const glideArmed = demo && !isLoading && !demoState.glidedBack && !online && !askLocation && !billingOpen && csaJob == null;
+  useEffect(() => {
+    if (!glideArmed) return;
+    let timer = 0;
+    const atBottom = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      return max > 4 && window.scrollY >= max - 2;
+    };
+    const glideBack = () => {
+      markDemoGlidedBack();
+      if (reducedMotion()) { setGoFlash(true); return; }
+      scrollUnderHeader(onlineCardRef.current);
+      // Flash once the glide has settled (this keeps running after the
+      // effect is disarmed by markDemoGlidedBack).
+      let last = -1, still = 0;
+      const settle = window.setInterval(() => {
+        still = Math.abs(window.scrollY - last) < 1 ? still + 1 : 0;
+        last = window.scrollY;
+        if (still >= 2) { window.clearInterval(settle); setGoFlash(true); }
+      }, 100);
+    };
+    const restart = () => {
+      window.clearTimeout(timer);
+      if (atBottom()) timer = window.setTimeout(glideBack, 3000);
+    };
+    const opts = { capture: true, passive: true } as const;
+    const events = ["scroll", "wheel", "touchstart", "touchmove", "pointerdown", "keydown"] as const;
+    events.forEach((e) => window.addEventListener(e, restart, opts));
+    restart();
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, restart, opts));
+    };
+  }, [glideArmed]);
   const hoursCap = WEEKLY_HOURS_CAP;
   // Demo: hours come from the online sessions (Go online → Stop), as they will
   // for real Operators; a day that isn't a demo work day gets no bar.
@@ -323,8 +372,10 @@ function OperatorDashboard() {
   }
 
   return (
-    <AppShell>
-      {showMap && ride.phase ? (
+    <AppShell onBack={demo && billingOpen ? closeBilling : undefined}>
+      {demo && billingOpen ? (
+        <DemoBillingScreen onBack={closeBilling} />
+      ) : showMap && ride.phase ? (
         <DemoRideScreen
           phase={ride.phase}
           operatorName={csaOperator}
@@ -430,6 +481,7 @@ function OperatorDashboard() {
                       ? "border-success/40 bg-success/15 text-success shadow-[0_0_60px_-10px_oklch(0.72_0.18_160/0.7)]"
                       : "border-primary/40 bg-gradient-primary text-primary-foreground shadow-glow hover:scale-105"
                     : "cursor-not-allowed border-border bg-muted text-muted-foreground/60",
+                  goFlash && !online && "animate-golive-flash",
                 )}
               >
                 {goOnline.isPending || goOffline.isPending ? (
@@ -599,7 +651,7 @@ function OperatorDashboard() {
 
         {/* Subscription block + recent trips */}
         <section className={cn("mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]", showMap && "hidden")}>
-          <div className="min-w-0 rounded-3xl border border-border bg-gradient-surface p-6 shadow-card">
+          <div ref={billingCardRef} className="min-w-0 rounded-3xl border border-border bg-gradient-surface p-6 shadow-card">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs uppercase tracking-widest text-muted-foreground">Monthly access</div>
@@ -614,7 +666,7 @@ function OperatorDashboard() {
             </div>
             {/* No billing/renewal date exists in the real operator data yet, so
                 the billing cycle bar shows in the demo only. */}
-            {demo && <BillingCycle daysPast={DEMO_WEEK.billingDaysPast} daysLeft={DEMO_WEEK.billingDaysLeft} />}
+            {demo && <BillingCycle />}
             <div className="mt-4 space-y-2 text-sm">
               {["Document vault & verification", "Customer trust shield"].map((b) => (
                 <div key={b} className="flex items-center gap-2 text-muted-foreground">
@@ -622,7 +674,10 @@ function OperatorDashboard() {
                 </div>
               ))}
             </div>
-            <button className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm hover:bg-secondary">
+            <button
+              onClick={demo ? openBilling : undefined}
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm hover:bg-secondary"
+            >
               Manage billing <ArrowRight className="h-4 w-4" />
             </button>
           </div>
@@ -729,12 +784,11 @@ function Guardrail({ ok, icon, label, value }: { ok: boolean; icon: React.ReactN
   );
 }
 
-/** The 30-day billing cycle as a "peppermint stick": days past are candy
- *  striped, days left are empty. The due date counts forward from today. */
-function BillingCycle({ daysPast, daysLeft }: { daysPast: number; daysLeft: number }) {
-  const due = new Date();
-  due.setDate(due.getDate() + daysLeft);
-  const dueText = due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+/** The billing cycle (the current calendar month) as a "peppermint stick":
+ *  days past are candy striped, days left are empty. Resets on the 1st, when
+ *  the next access fee is due. */
+function BillingCycle() {
+  const { daysPast, daysLeft, nextDue } = demoBillingCycle();
   return (
     <div className="mt-5" data-testid="billing-cycle">
       <div className="text-xs uppercase tracking-widest text-muted-foreground">Billing cycle</div>
@@ -748,7 +802,58 @@ function BillingCycle({ daysPast, daysLeft }: { daysPast: number; daysLeft: numb
         />
       </div>
       <div className="mt-1.5 text-xs text-muted-foreground">{daysPast} days past · {daysLeft} days left</div>
-      <div className="text-xs text-muted-foreground">Next access fee $499.99 due {dueText}</div>
+      <div className="text-xs text-muted-foreground">Next access fee ${DEMO_ACCESS_FEE} due {demoDate(nextDue)}</div>
+    </div>
+  );
+}
+
+/** Demo only: the payments screen behind "Manage billing", in the app's own
+ *  style. Everything is derived from today's date; nothing is stored. */
+function DemoBillingScreen({ onBack }: { onBack: () => void }) {
+  const { nextDue, paid } = demoBillingCycle();
+  const fee = `$${DEMO_ACCESS_FEE}`;
+  return (
+    <div data-testid="demo-billing" className="mx-auto max-w-xl px-4 py-10">
+      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Billing</div>
+      <h1 className="mt-1 font-display text-4xl font-semibold">Payments</h1>
+
+      <div className="mt-6 rounded-3xl border border-border bg-gradient-surface p-6 shadow-card">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-widest text-muted-foreground">Monthly access</div>
+            <div className="mt-1 font-display text-2xl">{fee} <span className="text-sm text-muted-foreground">/ month</span></div>
+          </div>
+          <span className="rounded-full bg-success/15 px-3 py-1 text-xs text-success">Active</span>
+        </div>
+        <div className="mt-5 text-xs uppercase tracking-widest text-muted-foreground">Payment method</div>
+        <div className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5 text-sm">
+          <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="font-mono tracking-wider">{DEMO_DOCS.debitMasked}</span>
+        </div>
+        <div className="mt-4 text-sm text-muted-foreground">Next access fee {fee} due {demoDate(nextDue)}</div>
+      </div>
+
+      <div className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
+        <h3 className="font-display text-xl">Last 3 months</h3>
+        <div className="mt-3 divide-y divide-border">
+          {paid.map((d) => (
+            <div key={d.toISOString()} className="flex items-center justify-between gap-3 py-3 text-sm">
+              <span className="text-muted-foreground">{demoDate(d)}</span>
+              <span className="flex items-center gap-3">
+                <span className="font-display text-base">{fee}</span>
+                <span className="rounded-full bg-success/15 px-2.5 py-0.5 text-xs text-success">Paid</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={onBack}
+        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm hover:bg-secondary"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back
+      </button>
     </div>
   );
 }

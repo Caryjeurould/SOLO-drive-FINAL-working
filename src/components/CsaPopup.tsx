@@ -9,8 +9,8 @@ import type { DemoJob } from "@/lib/demo";
 const AUTO_CLOSE_MS = 5000;
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const CUSTOMERS = [
-  "Avery Sample", "Jordan Demo", "Casey Example", "Riley Mock", "Morgan Testwell", "Quinn Placeholder",
-  "Harper Fictional", "Rowan Samplesby", "Jamie Demoford", "Skyler Mockton", "Emerson Examply", "Taylor Pretendo",
+  "Avery Sanchez", "Jordan Diaz", "Casey Ellis", "Riley Mitchell", "Morgan Torres", "Quinn Patel",
+  "Harper Foster", "Rowan Sullivan", "Jamie Dawson", "Skyler Morales", "Emerson Evans", "Taylor Price",
 ];
 
 /** A stable hash of the job, so the same job always gets the same number and customer. */

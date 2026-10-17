@@ -6,11 +6,11 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { CheckCircle2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DEMO_DOCS, demoDocNames, useDemoState } from "@/lib/demo";
+import { DEMO_DOCS, demoDocNames, demoPersona, useDemoState } from "@/lib/demo";
 
 function useDocNames() {
   const s = useDemoState();
-  return demoDocNames(s.first, s.last);
+  return { ...demoDocNames(s.first, s.last), persona: demoPersona(s.first) };
 }
 
 export type DemoDocKind = "license" | "registration" | "entity" | "commercial" | "bizliab";
@@ -21,6 +21,15 @@ const TITLES: Record<DemoDocKind, string> = {
   entity: "Articles of Organization",
   commercial: "Commercial insurance card",
   bizliab: "Business liability insurance card",
+};
+
+/** The short green line on each "uploaded" slot. */
+const UPLOADED: Record<DemoDocKind, string> = {
+  license: "Driver's license - uploaded",
+  registration: "Vehicle registration - uploaded",
+  entity: "Formation document - uploaded",
+  commercial: "Declarations - uploaded",
+  bizliab: "Business liability - uploaded",
 };
 
 /** Diagonal, semi-transparent watermark laid over a document (never baked into the image). */
@@ -54,7 +63,17 @@ type Layout = { w: number; h: number; patches: Patch[]; rules?: Rule[]; lines: L
 /** Where the name sits on each image, in the image's own pixels (the SVG viewBox
  *  scales it with the image, so the same numbers work in thumbnails and the large
  *  view). Each patch covers only the original name, in the local background colour. */
-function nameLayout(kind: DemoDocKind, side: "front" | "back", n: ReturnType<typeof demoDocNames>): Layout | null {
+function nameLayout(kind: DemoDocKind, side: "front" | "back", n: ReturnType<typeof useDocNames>): Layout | null {
+  // Maria's license: her printed name is already cleared from the image, so the
+  // name sits straight on the card (no visible patch), in its grey capitals.
+  if (kind === "license" && side === "front" && n.persona === "maria") return {
+    w: 337, h: 225,
+    patches: [{ x: 34, y: 146, w: 70, h: 26, fill: "none" }],
+    lines: [
+      { field: "license-last", text: n.last.toUpperCase(), x: 38, y: 155, size: 9.6, max: 64, family: DOC_SANS, weight: 700, fill: "rgb(72,70,70)" },
+      { field: "license-first", text: n.first.toUpperCase(), x: 38, y: 170, size: 9.6, max: 64, family: DOC_SANS, weight: 700, fill: "rgb(72,70,70)" },
+    ],
+  };
   if (kind === "license" && side === "front") return {
     w: 335, h: 225,
     patches: [{ x: 31, y: 147, w: 73, h: 25.5, fill: "rgb(211,223,222)", soft: true }],
@@ -205,7 +224,8 @@ export function BusinessLiabilityCard({ className }: { className?: string }) {
 /** One document face (image or the coded card) with its watermark. */
 function DocFace({ kind, side, className }: { kind: DemoDocKind; side: "front" | "back"; className?: string }) {
   const img = DEMO_DOCS.images;
-  const src = kind === "license" ? (side === "front" ? img.licenseFront : img.licenseBack)
+  const license = img.license[useDocNames().persona];
+  const src = kind === "license" ? license[side]
     : kind === "registration" ? img.registration
     : kind === "entity" ? img.entity
     : kind === "commercial" ? img.commercialInsurance
@@ -225,13 +245,13 @@ function DocFace({ kind, side, className }: { kind: DemoDocKind; side: "front" |
 }
 
 /** An "uploaded" document slot: thumbnail(s) that open the large view. */
-export function DemoDocThumb({ kind, label, caption }: { kind: DemoDocKind; label?: string; caption?: string }) {
+export function DemoDocThumb({ kind, caption }: { kind: DemoDocKind; caption?: string }) {
   const [open, setOpen] = useState<null | "front" | "back">(null);
   const sides: ("front" | "back")[] = kind === "license" ? ["front", "back"] : ["front"];
   return (
     <div data-testid={`demo-doc-${kind}`} className="rounded-xl border border-success/30 bg-success/5 p-2.5">
       <div className="flex items-center gap-1.5 text-xs text-success">
-        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> {label ?? TITLES[kind]} uploaded
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> {UPLOADED[kind]}
       </div>
       <div className={cn("mt-2 grid gap-2", sides.length === 2 ? "grid-cols-2" : "grid-cols-1")}>
         {sides.map((side) => (

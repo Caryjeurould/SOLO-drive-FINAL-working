@@ -25,6 +25,14 @@ export const DEMO_DOCS = {
   entityState: "Arizona",
   vehicle: { year: "2020", make: "Toyota", model: "Camry", vin: "78XXTW35RT997302", plate: "XXX7722", plateType: "Standard" },
   registrationExpires: "08/25/2027",
+  personalAuto: {
+    carrier: "Acme Insurance & Casualty",
+    policy: "468 84675-G99-05W",
+  },
+  /** Only the last four digits are ever shown. Fictional numbers. */
+  ssnMasked: "*** ** 5689",
+  debitMasked: "**** **** **** 9932",
+  ein: "86-3197254",
   commercial: {
     carrier: "Acme Insurance & Casualty",
     policy: "468 84675-G99-05W",
@@ -41,8 +49,11 @@ export const DEMO_DOCS = {
     expires: "AUG 2 2028",
   },
   images: {
-    licenseFront: "/demo/license.png",
-    licenseBack: "/demo/license-back.png",
+    /** Two sample licenses: Marcus (the default) and Maria (see demoPersona). */
+    license: {
+      marcus: { front: "/demo/license.png", back: "/demo/license-back.png", selfPhoto: "/demo/self-marcus.png" },
+      maria: { front: "/demo/license-maria.png", back: "/demo/license-back-maria.png", selfPhoto: "/demo/self-maria.png" },
+    },
     registration: "/demo/registration.png",
     commercialInsurance: "/demo/commercial-insurance.png",
     entity: "/demo/entity.png",
@@ -56,6 +67,37 @@ export function demoDocNames(first?: string, last?: string) {
   const f = first?.trim() || DEMO_DEFAULT_NAME.first;
   const l = last?.trim() || DEMO_DEFAULT_NAME.last;
   return { first: f, last: l, full: `${f} ${l}`, entity: `${l} Transports - PHX LLC`, coSigner: `Cheryl ${l}` };
+}
+
+/** Common female first names. A visitor whose typed first name is on this list
+ *  sees the Maria license and photo; every other name (including ambiguous ones
+ *  like Jordan or Taylor, and the skipped default) sees Marcus. Decided from the
+ *  typed name only, in memory. */
+const FEMALE_FIRST_NAMES = new Set(`
+  mary patricia jennifer linda elizabeth barbara susan jessica sarah karen lisa nancy betty margaret sandra
+  ashley kimberly emily donna michelle carol amanda dorothy melissa deborah stephanie rebecca sharon laura
+  cynthia kathleen amy angela shirley anna brenda pamela emma nicole helen samantha katherine christine debra
+  rachel carolyn janet catherine maria heather diane ruth julie olivia joyce virginia victoria lauren
+  christina joan evelyn judith megan cheryl hannah jacqueline martha gloria teresa ann sara madison
+  frances kathryn janice abigail alice judy sophia grace denise amber doris marilyn danielle beverly
+  isabella theresa diana natalie brittany charlotte marie kayla lori ava mia chloe ella lily zoe
+  aria scarlett penelope layla nora camila hazel violet aurora savannah audrey brooklyn bella claire
+  lucy stella natalia leah eleanor paisley naomi elena gabriella valentina ariana alyssa sofia
+  isabel jasmine maya kaylee allison destiny vanessa erica tiffany monica veronica crystal melanie
+  jenna caroline julia valerie sabrina tara wendy yvonne yolanda rosa carmen lucia ana juana
+  alejandra mariana daniela fernanda ximena paula adriana gabriela leticia beatriz silvia claudia esperanza
+  priya aisha fatima mei keiko sakura ingrid astrid greta heidi colleen molly kathy cindy tina
+  tammy stacy dawn connie peggy sally bonnie joanne marsha irene june rita norma lillian
+  rose ruby pearl hailey kaitlyn katelyn brianna gianna serenity delilah everly kinsley josephine
+  margot vivian luna willow ivy autumn sienna miranda bethany kristen kristin courtney lindsey chelsea
+  whitney holly april meredith marissa alicia felicia renee kara krista ellen colette
+  jane jill kate katie beth sue amelia abby gina nina anne annie elle eva liz jenny becky
+`.trim().split(/\s+/));
+
+/** Which sample person the demo documents and self photo show, from the typed first name. */
+export function demoPersona(first?: string): "maria" | "marcus" {
+  const name = first?.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return FEMALE_FIRST_NAMES.has(name) ? "maria" : "marcus";
 }
 
 /** The website simulation's pickup (its Book-A-Ride card and /customer start
@@ -118,6 +160,8 @@ type DemoState = {
   onboarding: OnboardingState;
   profile: Partial<OperatorProfile>;
   documents: Record<string, Pick<OperatorDocument, "status" | "expiration_date" | "file_url">>;
+  /** The dashboard has glided back up to Go online (once per run). */
+  glidedBack: boolean;
 };
 
 const EMPTY_ONBOARDING: OnboardingState = { stage: 1, status: "not_started", data: {} };
@@ -128,6 +172,7 @@ const fresh = (): DemoState => ({
   onboarding: EMPTY_ONBOARDING,
   profile: {},
   documents: {},
+  glidedBack: false,
 });
 
 let state: DemoState = fresh();
@@ -156,14 +201,7 @@ const yearsFromNow = (n: number) => {
   return isoDate(d);
 };
 
-/** A plain initials badge as the sample self photo. */
-function samplePhoto(first: string, last: string) {
-  const initials = `${first[0] ?? "D"}${last[0] ?? "O"}`.toUpperCase();
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" rx="16" fill="#3b4cca"/><text x="48" y="58" font-family="sans-serif" font-size="32" font-weight="700" fill="#fff" text-anchor="middle">${initials}</text><text x="48" y="84" font-family="sans-serif" font-size="10" fill="#fff" text-anchor="middle">SAMPLE</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-/** Obviously fake sample answers for every wizard field, with all four stages
+/** Realistic, fictional sample answers for every wizard field, with all four stages
  *  already completed: every document signed with the visitor's name, the
  *  background check cleared, both coverage confirmations filled in. */
 function sampleOnboardingData(first: string, last: string): OnboardingState["data"] {
@@ -171,17 +209,18 @@ function sampleOnboardingData(first: string, last: string): OnboardingState["dat
   const signedAt = new Date().toISOString();
   return {
     fullName: name,
-    phone: "(555) 010-0100",
+    phone: "(602) 555-0147",
     address: DEMO_DOCS.address,
     vehMake: DEMO_DOCS.vehicle.make,
     vehModel: DEMO_DOCS.vehicle.model,
     vehYear: DEMO_DOCS.vehicle.year,
     vin: DEMO_DOCS.vehicle.vin,
-    autoCarrier: "Demo Mutual",
-    autoPolicy: "DEMO-AUTO-0001",
-    ssn: "000-00-0000",
-    debit: "4242 4242 4242 4242",
-    photoDataUrl: samplePhoto(first, last),
+    autoCarrier: DEMO_DOCS.personalAuto.carrier,
+    autoPolicy: DEMO_DOCS.personalAuto.policy,
+    ssn: DEMO_DOCS.ssnMasked,
+    debit: DEMO_DOCS.debitMasked,
+    // The license photo's face, marked SAMPLE.
+    photoDataUrl: DEMO_DOCS.images.license[demoPersona(first)].selfPhoto,
     licenseExpiration: yearsFromNow(3),
     stage1Complete: true,
     feloniesNone: true,
@@ -193,7 +232,7 @@ function sampleOnboardingData(first: string, last: string): OnboardingState["dat
     bgStatus: "cleared",
     entityType: "LLC",
     entityName: demoDocNames(first, last).entity,
-    ein: "00-0000000",
+    ein: DEMO_DOCS.ein,
     formationState: DEMO_DOCS.entityState,
     commCarrier: DEMO_DOCS.commercial.carrier,
     commPolicy: DEMO_DOCS.commercial.policy,
@@ -243,6 +282,10 @@ export function startDemo(firstName: string, lastName: string) {
 export function resetDemo() {
   resetSessions();
   set(fresh());
+}
+
+export function markDemoGlidedBack() {
+  set({ ...state, glidedBack: true });
 }
 
 export function updateDemoOnboarding(next: OnboardingState) {
@@ -321,10 +364,25 @@ export const DEMO_WEEK = {
   rides: 58,
   deliveries: 39,
   ytd: 82244.36,
-  /** Billing cycle: 30 days, 11 past (the due date is counted from today). */
-  billingDaysPast: 11,
-  billingDaysLeft: 19,
 };
+
+/** The demo's monthly access fee and billing cycle, from the real calendar:
+ *  the cycle is the current month, and the next fee is due on the 1st of next
+ *  month. */
+export const DEMO_ACCESS_FEE = 499.99;
+export function demoBillingCycle(now = new Date()) {
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysPast = now.getDate() - 1;
+  const firstOf = (monthsAhead: number) => new Date(now.getFullYear(), now.getMonth() + monthsAhead, 1);
+  return {
+    daysPast,
+    daysLeft: daysInMonth - daysPast,
+    nextDue: firstOf(1),
+    /** The last three fees, newest first: the 1st of this month and the two before. */
+    paid: [0, -1, -2].map(firstOf),
+  };
+}
+export const demoDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 export type DemoJob = {
   /** Day and time label only (never a real date, so nothing is in the future). */
@@ -342,103 +400,103 @@ export type DemoJob = {
  *  6:00 am to 6:00 pm, about 17 mph. Fictional places only. Each day's
  *  minutes add up to that day's hours; the fares add up to $2,005.96. */
 export const DEMO_JOBS: DemoJob[] = [
-  { when: "Fri 5:05 pm", kind: "Delivery", from: "Mock Pet Supply", to: "Test Meadows", miles: 7.9, fare: 21.17, minutes: 29 },
-  { when: "Fri 4:02 pm", kind: "Ride", from: "Mock Medical Center", to: "Sample Hotel", miles: 15.0, fare: 40.20, minutes: 52 },
-  { when: "Fri 3:41 pm", kind: "Delivery", from: "Demo Deli", to: "Mock Commons", miles: 3.9, fare: 10.45, minutes: 14 },
-  { when: "Fri 3:12 pm", kind: "Ride", from: "Demo Heights", to: "Sample Hotel", miles: 5.8, fare: 15.54, minutes: 20 },
-  { when: "Fri 2:45 pm", kind: "Delivery", from: "Sample Noodle House", to: "Placeholder Lane", miles: 6.9, fare: 18.49, minutes: 25 },
-  { when: "Fri 2:08 pm", kind: "Ride", from: "Sample Hotel", to: "Mock Library", miles: 9.8, fare: 26.26, minutes: 35 },
-  { when: "Fri 1:26 pm", kind: "Ride", from: "Demo Ave", to: "Demo Arena", miles: 9.8, fare: 26.26, minutes: 32 },
-  { when: "Fri 1:02 pm", kind: "Ride", from: "Sample Station", to: "Example College", miles: 6.9, fare: 18.49, minutes: 22 },
-  { when: "Fri 12:34 pm", kind: "Ride", from: "Example Airfield", to: "Test Terminal", miles: 7.9, fare: 21.17, minutes: 25 },
-  { when: "Fri 11:48 am", kind: "Ride", from: "Test Town Square", to: "Mock Mall", miles: 9.8, fare: 26.26, minutes: 35 },
-  { when: "Fri 11:11 am", kind: "Delivery", from: "Demo Deli", to: "Example Row", miles: 7.9, fare: 21.17, minutes: 25 },
-  { when: "Fri 10:40 am", kind: "Delivery", from: "Demo Hardware", to: "Mock Commons", miles: 7.8, fare: 20.90, minutes: 26 },
-  { when: "Fri 10:00 am", kind: "Ride", from: "Test Terminal", to: "Placeholder Pier", miles: 9.8, fare: 26.26, minutes: 33 },
-  { when: "Fri 9:24 am", kind: "Delivery", from: "Example Bakery", to: "Example Row", miles: 7.8, fare: 20.90, minutes: 25 },
-  { when: "Fri 8:54 am", kind: "Ride", from: "Sample Hotel", to: "Placeholder Pier", miles: 5.9, fare: 15.81, minutes: 19 },
-  { when: "Fri 8:19 am", kind: "Ride", from: "Example Airfield", to: "Sample Plaza", miles: 9.5, fare: 25.46, minutes: 31 },
-  { when: "Fri 7:37 am", kind: "Ride", from: "Demo Arena", to: "Example Park", miles: 9.4, fare: 25.19, minutes: 31 },
-  { when: "Fri 7:00 am", kind: "Delivery", from: "Sample Noodle House", to: "Example Hills", miles: 7.8, fare: 20.90, minutes: 27 },
-  { when: "Fri 6:20 am", kind: "Ride", from: "Test Terminal", to: "Sample Station", miles: 9.3, fare: 24.92, minutes: 33 },
-  { when: "Fri 6:01 am", kind: "Delivery", from: "Test Florist", to: "Example Row", miles: 3.2, fare: 8.58, minutes: 13 },
-  { when: "Thu 5:11 pm", kind: "Ride", from: "Test Town Square", to: "Demo Arena", miles: 8.9, fare: 23.85, minutes: 30 },
-  { when: "Thu 4:22 pm", kind: "Ride", from: "Placeholder Pier", to: "Example Airfield", miles: 8.7, fare: 23.32, minutes: 30 },
-  { when: "Thu 3:54 pm", kind: "Ride", from: "Sample Hotel", to: "Mock Library", miles: 6.3, fare: 16.88, minutes: 21 },
-  { when: "Thu 3:06 pm", kind: "Ride", from: "Placeholder Pier", to: "Example Airfield", miles: 9.6, fare: 25.73, minutes: 31 },
-  { when: "Thu 2:22 pm", kind: "Ride", from: "Example Park", to: "Test Terminal", miles: 7.7, fare: 20.64, minutes: 26 },
-  { when: "Thu 2:03 pm", kind: "Delivery", from: "Test Florist", to: "Demo Village", miles: 4.7, fare: 12.60, minutes: 16 },
-  { when: "Thu 1:17 pm", kind: "Delivery", from: "Test Florist", to: "Sample Court", miles: 7.9, fare: 21.17, minutes: 28 },
-  { when: "Thu 12:56 pm", kind: "Delivery", from: "Demo Deli", to: "Example Row", miles: 5.0, fare: 13.40, minutes: 17 },
-  { when: "Thu 12:18 pm", kind: "Ride", from: "Test Town Square", to: "Sample Hotel", miles: 6.9, fare: 18.49, minutes: 22 },
-  { when: "Thu 11:42 am", kind: "Delivery", from: "Demo Hardware", to: "Placeholder Lane", miles: 8.0, fare: 21.44, minutes: 29 },
-  { when: "Thu 11:14 am", kind: "Ride", from: "Sample Plaza", to: "Test Town Square", miles: 6.8, fare: 18.22, minutes: 24 },
-  { when: "Thu 10:24 am", kind: "Ride", from: "Demo Heights", to: "Test Terminal", miles: 9.3, fare: 24.92, minutes: 30 },
-  { when: "Thu 9:34 am", kind: "Ride", from: "Placeholder Pier", to: "Sample Station", miles: 10.0, fare: 26.80, minutes: 35 },
-  { when: "Thu 9:00 am", kind: "Delivery", from: "Demo Hardware", to: "Example Row", miles: 5.7, fare: 15.28, minutes: 18 },
-  { when: "Thu 8:26 am", kind: "Delivery", from: "Mock Pet Supply", to: "Demo Village", miles: 6.7, fare: 17.96, minutes: 23 },
-  { when: "Thu 7:42 am", kind: "Ride", from: "Demo Ave", to: "Placeholder Pier", miles: 9.4, fare: 25.19, minutes: 33 },
-  { when: "Thu 6:54 am", kind: "Delivery", from: "Demo Deli", to: "Sample Court", miles: 10.1, fare: 27.07, minutes: 33 },
-  { when: "Thu 6:05 am", kind: "Ride", from: "Sample Plaza", to: "Placeholder Pier", miles: 10.0, fare: 26.80, minutes: 34 },
-  { when: "Wed 5:04 pm", kind: "Ride", from: "Mock Medical Center", to: "Test Terminal", miles: 8.8, fare: 23.58, minutes: 28 },
-  { when: "Wed 4:26 pm", kind: "Delivery", from: "Demo Deli", to: "Test Meadows", miles: 6.7, fare: 17.96, minutes: 24 },
-  { when: "Wed 3:52 pm", kind: "Ride", from: "Mock Mall", to: "Demo Ave", miles: 9.5, fare: 25.46, minutes: 32 },
-  { when: "Wed 3:25 pm", kind: "Ride", from: "Demo Ave", to: "Demo Arena", miles: 5.2, fare: 13.94, minutes: 19 },
-  { when: "Wed 2:41 pm", kind: "Ride", from: "Demo Heights", to: "Example College", miles: 9.1, fare: 24.39, minutes: 32 },
-  { when: "Wed 2:19 pm", kind: "Delivery", from: "Example Bakery", to: "Demo Village", miles: 3.5, fare: 9.38, minutes: 13 },
-  { when: "Wed 1:48 pm", kind: "Delivery", from: "Sample Noodle House", to: "Demo Gardens", miles: 7.0, fare: 18.76, minutes: 22 },
-  { when: "Wed 1:06 pm", kind: "Ride", from: "Example College", to: "Test Town Square", miles: 10.0, fare: 26.80, minutes: 33 },
-  { when: "Wed 12:29 pm", kind: "Delivery", from: "Placeholder Pizza", to: "Example Row", miles: 7.5, fare: 20.10, minutes: 27 },
-  { when: "Wed 11:34 am", kind: "Ride", from: "Test Town Square", to: "Example College", miles: 12.1, fare: 32.43, minutes: 43 },
-  { when: "Wed 11:07 am", kind: "Ride", from: "Example Airfield", to: "Test Town Square", miles: 7.4, fare: 19.83, minutes: 24 },
-  { when: "Wed 10:34 am", kind: "Delivery", from: "Example Grocer", to: "Demo Gardens", miles: 6.8, fare: 18.22, minutes: 24 },
-  { when: "Wed 9:56 am", kind: "Ride", from: "Demo Arena", to: "Demo Heights", miles: 9.0, fare: 24.12, minutes: 31 },
-  { when: "Wed 9:30 am", kind: "Delivery", from: "Example Grocer", to: "Demo Village", miles: 3.8, fare: 10.18, minutes: 12 },
-  { when: "Wed 8:55 am", kind: "Ride", from: "Demo Ave", to: "Placeholder Pier", miles: 6.7, fare: 17.96, minutes: 22 },
-  { when: "Wed 8:27 am", kind: "Delivery", from: "Placeholder Pizza", to: "Mock Commons", miles: 5.8, fare: 15.54, minutes: 18 },
-  { when: "Wed 7:49 am", kind: "Ride", from: "Sample Station", to: "Example College", miles: 9.5, fare: 25.46, minutes: 31 },
-  { when: "Wed 7:16 am", kind: "Ride", from: "Example Airfield", to: "Mock Mall", miles: 6.7, fare: 17.96, minutes: 22 },
-  { when: "Wed 6:27 am", kind: "Ride", from: "Mock Medical Center", to: "Example College", miles: 10.0, fare: 26.80, minutes: 36 },
-  { when: "Wed 6:02 am", kind: "Delivery", from: "Example Bakery", to: "Mock Commons", miles: 5.1, fare: 13.67, minutes: 17 },
-  { when: "Tue 5:18 pm", kind: "Ride", from: "Example Park", to: "Mock Medical Center", miles: 6.9, fare: 18.49, minutes: 22 },
-  { when: "Tue 4:53 pm", kind: "Delivery", from: "Placeholder Pizza", to: "Demo Village", miles: 5.6, fare: 15.01, minutes: 18 },
-  { when: "Tue 4:16 pm", kind: "Ride", from: "Sample Plaza", to: "Example Airfield", miles: 8.2, fare: 21.98, minutes: 28 },
-  { when: "Tue 3:34 pm", kind: "Ride", from: "Test Town Square", to: "Sample Plaza", miles: 8.5, fare: 22.78, minutes: 31 },
-  { when: "Tue 3:03 pm", kind: "Delivery", from: "Demo Hardware", to: "Demo Gardens", miles: 8.0, fare: 21.44, minutes: 26 },
-  { when: "Tue 2:29 pm", kind: "Ride", from: "Sample Hotel", to: "Example Airfield", miles: 7.1, fare: 19.03, minutes: 23 },
-  { when: "Tue 1:51 pm", kind: "Ride", from: "Mock Medical Center", to: "Test Town Square", miles: 9.8, fare: 26.26, minutes: 34 },
-  { when: "Tue 1:16 pm", kind: "Ride", from: "Example College", to: "Example Airfield", miles: 8.7, fare: 23.32, minutes: 29 },
-  { when: "Tue 12:53 pm", kind: "Delivery", from: "Sample Pharmacy", to: "Sample Terrace", miles: 5.1, fare: 13.67, minutes: 16 },
-  { when: "Tue 12:13 pm", kind: "Ride", from: "Sample Station", to: "Test Town Square", miles: 8.3, fare: 22.24, minutes: 28 },
-  { when: "Tue 11:33 am", kind: "Delivery", from: "Example Grocer", to: "Example Hills", miles: 8.0, fare: 21.44, minutes: 28 },
-  { when: "Tue 11:04 am", kind: "Ride", from: "Sample Hotel", to: "Placeholder Pier", miles: 7.2, fare: 19.30, minutes: 24 },
-  { when: "Tue 10:26 am", kind: "Ride", from: "Mock Medical Center", to: "Test Terminal", miles: 9.4, fare: 25.19, minutes: 30 },
-  { when: "Tue 9:51 am", kind: "Delivery", from: "Example Bakery", to: "Example Hills", miles: 9.6, fare: 25.73, minutes: 31 },
-  { when: "Tue 9:19 am", kind: "Delivery", from: "Demo Hardware", to: "Mock Ridge", miles: 7.6, fare: 20.37, minutes: 24 },
-  { when: "Tue 8:54 am", kind: "Ride", from: "Mock Mall", to: "Mock Library", miles: 6.3, fare: 16.88, minutes: 20 },
-  { when: "Tue 8:18 am", kind: "Ride", from: "Sample Station", to: "Demo Arena", miles: 7.2, fare: 19.30, minutes: 25 },
-  { when: "Tue 7:36 am", kind: "Ride", from: "Mock Medical Center", to: "Example Airfield", miles: 10.0, fare: 26.80, minutes: 36 },
-  { when: "Tue 7:07 am", kind: "Delivery", from: "Placeholder Pizza", to: "Placeholder Lane", miles: 5.8, fare: 15.54, minutes: 21 },
-  { when: "Tue 6:42 am", kind: "Delivery", from: "Mock Pet Supply", to: "Sample Terrace", miles: 5.5, fare: 14.74, minutes: 18 },
-  { when: "Tue 6:05 am", kind: "Delivery", from: "Mock Pet Supply", to: "Example Row", miles: 8.0, fare: 21.44, minutes: 28 },
-  { when: "Mon 4:54 pm", kind: "Ride", from: "Mock Mall", to: "Test Terminal", miles: 9.1, fare: 24.39, minutes: 33 },
-  { when: "Mon 4:15 pm", kind: "Delivery", from: "Demo Deli", to: "Demo Village", miles: 7.6, fare: 20.37, minutes: 27 },
-  { when: "Mon 3:34 pm", kind: "Delivery", from: "Placeholder Pizza", to: "Example Row", miles: 7.4, fare: 19.83, minutes: 29 },
-  { when: "Mon 2:47 pm", kind: "Ride", from: "Placeholder Pier", to: "Example College", miles: 9.4, fare: 25.19, minutes: 33 },
-  { when: "Mon 2:12 pm", kind: "Ride", from: "Demo Ave", to: "Mock Library", miles: 6.7, fare: 17.96, minutes: 24 },
-  { when: "Mon 1:43 pm", kind: "Delivery", from: "Mock Market", to: "Demo Village", miles: 5.1, fare: 13.67, minutes: 18 },
-  { when: "Mon 1:13 pm", kind: "Ride", from: "Test Town Square", to: "Test Terminal", miles: 5.0, fare: 13.40, minutes: 18 },
-  { when: "Mon 12:47 pm", kind: "Delivery", from: "Demo Deli", to: "Example Row", miles: 6.6, fare: 17.69, minutes: 22 },
-  { when: "Mon 12:13 pm", kind: "Delivery", from: "Placeholder Pizza", to: "Sample Terrace", miles: 4.7, fare: 12.60, minutes: 16 },
-  { when: "Mon 11:38 am", kind: "Ride", from: "Placeholder Pier", to: "Example College", miles: 8.2, fare: 21.98, minutes: 27 },
-  { when: "Mon 11:22 am", kind: "Delivery", from: "Demo Deli", to: "Mock Ridge", miles: 3.0, fare: 8.04, minutes: 12 },
-  { when: "Mon 10:49 am", kind: "Ride", from: "Test Town Square", to: "Demo Arena", miles: 6.9, fare: 18.49, minutes: 23 },
-  { when: "Mon 9:59 am", kind: "Ride", from: "Example Airfield", to: "Example Park", miles: 8.5, fare: 22.78, minutes: 33 },
-  { when: "Mon 9:14 am", kind: "Ride", from: "Example College", to: "Demo Ave", miles: 6.9, fare: 18.49, minutes: 27 },
-  { when: "Mon 8:08 am", kind: "Ride", from: "Example Airfield", to: "Sample Hotel", miles: 15.0, fare: 40.20, minutes: 50 },
-  { when: "Mon 7:34 am", kind: "Delivery", from: "Example Grocer", to: "Placeholder Lane", miles: 5.5, fare: 14.74, minutes: 21 },
-  { when: "Mon 6:50 am", kind: "Ride", from: "Test Town Square", to: "Test Terminal", miles: 8.5, fare: 22.78, minutes: 30 },
-  { when: "Mon 6:05 am", kind: "Ride", from: "Mock Library", to: "Sample Plaza", miles: 9.6, fare: 25.73, minutes: 37 },
+  { when: "Fri 5:05 pm", kind: "Delivery", from: "Desert Paws Pet Supply", to: "Arrowhead Meadows", miles: 7.9, fare: 21.17, minutes: 29 },
+  { when: "Fri 4:02 pm", kind: "Ride", from: "Camelback Valley Medical Center", to: "Copper Canyon Hotel", miles: 15.0, fare: 40.20, minutes: 52 },
+  { when: "Fri 3:41 pm", kind: "Delivery", from: "Saguaro Street Deli", to: "Ahwatukee Commons", miles: 3.9, fare: 10.45, minutes: 14 },
+  { when: "Fri 3:12 pm", kind: "Ride", from: "Piestewa Heights", to: "Copper Canyon Hotel", miles: 5.8, fare: 15.54, minutes: 20 },
+  { when: "Fri 2:45 pm", kind: "Delivery", from: "Golden Lantern Noodle House", to: "Quail Run Lane", miles: 6.9, fare: 18.49, minutes: 25 },
+  { when: "Fri 2:08 pm", kind: "Ride", from: "Copper Canyon Hotel", to: "Cottonwood Public Library", miles: 9.8, fare: 26.26, minutes: 35 },
+  { when: "Fri 1:26 pm", kind: "Ride", from: "Palo Verde Ave", to: "Desert Sky Arena", miles: 9.8, fare: 26.26, minutes: 32 },
+  { when: "Fri 1:02 pm", kind: "Ride", from: "Mesquite Transit Center", to: "Maricopa Valley College", miles: 6.9, fare: 18.49, minutes: 22 },
+  { when: "Fri 12:34 pm", kind: "Ride", from: "Sonoran Executive Airfield", to: "Valley Air Terminal", miles: 7.9, fare: 21.17, minutes: 25 },
+  { when: "Fri 11:48 am", kind: "Ride", from: "Arcadia Town Square", to: "Sun Valley Mall", miles: 9.8, fare: 26.26, minutes: 35 },
+  { when: "Fri 11:11 am", kind: "Delivery", from: "Saguaro Street Deli", to: "Garfield Row", miles: 7.9, fare: 21.17, minutes: 25 },
+  { when: "Fri 10:40 am", kind: "Delivery", from: "Ironwood Hardware", to: "Ahwatukee Commons", miles: 7.8, fare: 20.90, minutes: 26 },
+  { when: "Fri 10:00 am", kind: "Ride", from: "Valley Air Terminal", to: "Tempe Marina Pier", miles: 9.8, fare: 26.26, minutes: 33 },
+  { when: "Fri 9:24 am", kind: "Delivery", from: "Sunrise Mesa Bakery", to: "Garfield Row", miles: 7.8, fare: 20.90, minutes: 25 },
+  { when: "Fri 8:54 am", kind: "Ride", from: "Copper Canyon Hotel", to: "Tempe Marina Pier", miles: 5.9, fare: 15.81, minutes: 19 },
+  { when: "Fri 8:19 am", kind: "Ride", from: "Sonoran Executive Airfield", to: "Camelback Corporate Plaza", miles: 9.5, fare: 25.46, minutes: 31 },
+  { when: "Fri 7:37 am", kind: "Ride", from: "Desert Sky Arena", to: "Cholla Ridge Park", miles: 9.4, fare: 25.19, minutes: 31 },
+  { when: "Fri 7:00 am", kind: "Delivery", from: "Golden Lantern Noodle House", to: "Moon Valley Hills", miles: 7.8, fare: 20.90, minutes: 27 },
+  { when: "Fri 6:20 am", kind: "Ride", from: "Valley Air Terminal", to: "Mesquite Transit Center", miles: 9.3, fare: 24.92, minutes: 33 },
+  { when: "Fri 6:01 am", kind: "Delivery", from: "Ocotillo Florist", to: "Garfield Row", miles: 3.2, fare: 8.58, minutes: 13 },
+  { when: "Thu 5:11 pm", kind: "Ride", from: "Arcadia Town Square", to: "Desert Sky Arena", miles: 8.9, fare: 23.85, minutes: 30 },
+  { when: "Thu 4:22 pm", kind: "Ride", from: "Tempe Marina Pier", to: "Sonoran Executive Airfield", miles: 8.7, fare: 23.32, minutes: 30 },
+  { when: "Thu 3:54 pm", kind: "Ride", from: "Copper Canyon Hotel", to: "Cottonwood Public Library", miles: 6.3, fare: 16.88, minutes: 21 },
+  { when: "Thu 3:06 pm", kind: "Ride", from: "Tempe Marina Pier", to: "Sonoran Executive Airfield", miles: 9.6, fare: 25.73, minutes: 31 },
+  { when: "Thu 2:22 pm", kind: "Ride", from: "Cholla Ridge Park", to: "Valley Air Terminal", miles: 7.7, fare: 20.64, minutes: 26 },
+  { when: "Thu 2:03 pm", kind: "Delivery", from: "Ocotillo Florist", to: "Desert Willow Village", miles: 4.7, fare: 12.60, minutes: 16 },
+  { when: "Thu 1:17 pm", kind: "Delivery", from: "Ocotillo Florist", to: "Saguaro Court", miles: 7.9, fare: 21.17, minutes: 28 },
+  { when: "Thu 12:56 pm", kind: "Delivery", from: "Saguaro Street Deli", to: "Garfield Row", miles: 5.0, fare: 13.40, minutes: 17 },
+  { when: "Thu 12:18 pm", kind: "Ride", from: "Arcadia Town Square", to: "Copper Canyon Hotel", miles: 6.9, fare: 18.49, minutes: 22 },
+  { when: "Thu 11:42 am", kind: "Delivery", from: "Ironwood Hardware", to: "Quail Run Lane", miles: 8.0, fare: 21.44, minutes: 29 },
+  { when: "Thu 11:14 am", kind: "Ride", from: "Camelback Corporate Plaza", to: "Arcadia Town Square", miles: 6.8, fare: 18.22, minutes: 24 },
+  { when: "Thu 10:24 am", kind: "Ride", from: "Piestewa Heights", to: "Valley Air Terminal", miles: 9.3, fare: 24.92, minutes: 30 },
+  { when: "Thu 9:34 am", kind: "Ride", from: "Tempe Marina Pier", to: "Mesquite Transit Center", miles: 10.0, fare: 26.80, minutes: 35 },
+  { when: "Thu 9:00 am", kind: "Delivery", from: "Ironwood Hardware", to: "Garfield Row", miles: 5.7, fare: 15.28, minutes: 18 },
+  { when: "Thu 8:26 am", kind: "Delivery", from: "Desert Paws Pet Supply", to: "Desert Willow Village", miles: 6.7, fare: 17.96, minutes: 23 },
+  { when: "Thu 7:42 am", kind: "Ride", from: "Palo Verde Ave", to: "Tempe Marina Pier", miles: 9.4, fare: 25.19, minutes: 33 },
+  { when: "Thu 6:54 am", kind: "Delivery", from: "Saguaro Street Deli", to: "Saguaro Court", miles: 10.1, fare: 27.07, minutes: 33 },
+  { when: "Thu 6:05 am", kind: "Ride", from: "Camelback Corporate Plaza", to: "Tempe Marina Pier", miles: 10.0, fare: 26.80, minutes: 34 },
+  { when: "Wed 5:04 pm", kind: "Ride", from: "Camelback Valley Medical Center", to: "Valley Air Terminal", miles: 8.8, fare: 23.58, minutes: 28 },
+  { when: "Wed 4:26 pm", kind: "Delivery", from: "Saguaro Street Deli", to: "Arrowhead Meadows", miles: 6.7, fare: 17.96, minutes: 24 },
+  { when: "Wed 3:52 pm", kind: "Ride", from: "Sun Valley Mall", to: "Palo Verde Ave", miles: 9.5, fare: 25.46, minutes: 32 },
+  { when: "Wed 3:25 pm", kind: "Ride", from: "Palo Verde Ave", to: "Desert Sky Arena", miles: 5.2, fare: 13.94, minutes: 19 },
+  { when: "Wed 2:41 pm", kind: "Ride", from: "Piestewa Heights", to: "Maricopa Valley College", miles: 9.1, fare: 24.39, minutes: 32 },
+  { when: "Wed 2:19 pm", kind: "Delivery", from: "Sunrise Mesa Bakery", to: "Desert Willow Village", miles: 3.5, fare: 9.38, minutes: 13 },
+  { when: "Wed 1:48 pm", kind: "Delivery", from: "Golden Lantern Noodle House", to: "Arcadia Gardens", miles: 7.0, fare: 18.76, minutes: 22 },
+  { when: "Wed 1:06 pm", kind: "Ride", from: "Maricopa Valley College", to: "Arcadia Town Square", miles: 10.0, fare: 26.80, minutes: 33 },
+  { when: "Wed 12:29 pm", kind: "Delivery", from: "Cactus Flats Pizza", to: "Garfield Row", miles: 7.5, fare: 20.10, minutes: 27 },
+  { when: "Wed 11:34 am", kind: "Ride", from: "Arcadia Town Square", to: "Maricopa Valley College", miles: 12.1, fare: 32.43, minutes: 43 },
+  { when: "Wed 11:07 am", kind: "Ride", from: "Sonoran Executive Airfield", to: "Arcadia Town Square", miles: 7.4, fare: 19.83, minutes: 24 },
+  { when: "Wed 10:34 am", kind: "Delivery", from: "Mesa Fresh Grocer", to: "Arcadia Gardens", miles: 6.8, fare: 18.22, minutes: 24 },
+  { when: "Wed 9:56 am", kind: "Ride", from: "Desert Sky Arena", to: "Piestewa Heights", miles: 9.0, fare: 24.12, minutes: 31 },
+  { when: "Wed 9:30 am", kind: "Delivery", from: "Mesa Fresh Grocer", to: "Desert Willow Village", miles: 3.8, fare: 10.18, minutes: 12 },
+  { when: "Wed 8:55 am", kind: "Ride", from: "Palo Verde Ave", to: "Tempe Marina Pier", miles: 6.7, fare: 17.96, minutes: 22 },
+  { when: "Wed 8:27 am", kind: "Delivery", from: "Cactus Flats Pizza", to: "Ahwatukee Commons", miles: 5.8, fare: 15.54, minutes: 18 },
+  { when: "Wed 7:49 am", kind: "Ride", from: "Mesquite Transit Center", to: "Maricopa Valley College", miles: 9.5, fare: 25.46, minutes: 31 },
+  { when: "Wed 7:16 am", kind: "Ride", from: "Sonoran Executive Airfield", to: "Sun Valley Mall", miles: 6.7, fare: 17.96, minutes: 22 },
+  { when: "Wed 6:27 am", kind: "Ride", from: "Camelback Valley Medical Center", to: "Maricopa Valley College", miles: 10.0, fare: 26.80, minutes: 36 },
+  { when: "Wed 6:02 am", kind: "Delivery", from: "Sunrise Mesa Bakery", to: "Ahwatukee Commons", miles: 5.1, fare: 13.67, minutes: 17 },
+  { when: "Tue 5:18 pm", kind: "Ride", from: "Cholla Ridge Park", to: "Camelback Valley Medical Center", miles: 6.9, fare: 18.49, minutes: 22 },
+  { when: "Tue 4:53 pm", kind: "Delivery", from: "Cactus Flats Pizza", to: "Desert Willow Village", miles: 5.6, fare: 15.01, minutes: 18 },
+  { when: "Tue 4:16 pm", kind: "Ride", from: "Camelback Corporate Plaza", to: "Sonoran Executive Airfield", miles: 8.2, fare: 21.98, minutes: 28 },
+  { when: "Tue 3:34 pm", kind: "Ride", from: "Arcadia Town Square", to: "Camelback Corporate Plaza", miles: 8.5, fare: 22.78, minutes: 31 },
+  { when: "Tue 3:03 pm", kind: "Delivery", from: "Ironwood Hardware", to: "Arcadia Gardens", miles: 8.0, fare: 21.44, minutes: 26 },
+  { when: "Tue 2:29 pm", kind: "Ride", from: "Copper Canyon Hotel", to: "Sonoran Executive Airfield", miles: 7.1, fare: 19.03, minutes: 23 },
+  { when: "Tue 1:51 pm", kind: "Ride", from: "Camelback Valley Medical Center", to: "Arcadia Town Square", miles: 9.8, fare: 26.26, minutes: 34 },
+  { when: "Tue 1:16 pm", kind: "Ride", from: "Maricopa Valley College", to: "Sonoran Executive Airfield", miles: 8.7, fare: 23.32, minutes: 29 },
+  { when: "Tue 12:53 pm", kind: "Delivery", from: "Glendale Corner Pharmacy", to: "Tatum Terrace", miles: 5.1, fare: 13.67, minutes: 16 },
+  { when: "Tue 12:13 pm", kind: "Ride", from: "Mesquite Transit Center", to: "Arcadia Town Square", miles: 8.3, fare: 22.24, minutes: 28 },
+  { when: "Tue 11:33 am", kind: "Delivery", from: "Mesa Fresh Grocer", to: "Moon Valley Hills", miles: 8.0, fare: 21.44, minutes: 28 },
+  { when: "Tue 11:04 am", kind: "Ride", from: "Copper Canyon Hotel", to: "Tempe Marina Pier", miles: 7.2, fare: 19.30, minutes: 24 },
+  { when: "Tue 10:26 am", kind: "Ride", from: "Camelback Valley Medical Center", to: "Valley Air Terminal", miles: 9.4, fare: 25.19, minutes: 30 },
+  { when: "Tue 9:51 am", kind: "Delivery", from: "Sunrise Mesa Bakery", to: "Moon Valley Hills", miles: 9.6, fare: 25.73, minutes: 31 },
+  { when: "Tue 9:19 am", kind: "Delivery", from: "Ironwood Hardware", to: "South Mountain Ridge", miles: 7.6, fare: 20.37, minutes: 24 },
+  { when: "Tue 8:54 am", kind: "Ride", from: "Sun Valley Mall", to: "Cottonwood Public Library", miles: 6.3, fare: 16.88, minutes: 20 },
+  { when: "Tue 8:18 am", kind: "Ride", from: "Mesquite Transit Center", to: "Desert Sky Arena", miles: 7.2, fare: 19.30, minutes: 25 },
+  { when: "Tue 7:36 am", kind: "Ride", from: "Camelback Valley Medical Center", to: "Sonoran Executive Airfield", miles: 10.0, fare: 26.80, minutes: 36 },
+  { when: "Tue 7:07 am", kind: "Delivery", from: "Cactus Flats Pizza", to: "Quail Run Lane", miles: 5.8, fare: 15.54, minutes: 21 },
+  { when: "Tue 6:42 am", kind: "Delivery", from: "Desert Paws Pet Supply", to: "Tatum Terrace", miles: 5.5, fare: 14.74, minutes: 18 },
+  { when: "Tue 6:05 am", kind: "Delivery", from: "Desert Paws Pet Supply", to: "Garfield Row", miles: 8.0, fare: 21.44, minutes: 28 },
+  { when: "Mon 4:54 pm", kind: "Ride", from: "Sun Valley Mall", to: "Valley Air Terminal", miles: 9.1, fare: 24.39, minutes: 33 },
+  { when: "Mon 4:15 pm", kind: "Delivery", from: "Saguaro Street Deli", to: "Desert Willow Village", miles: 7.6, fare: 20.37, minutes: 27 },
+  { when: "Mon 3:34 pm", kind: "Delivery", from: "Cactus Flats Pizza", to: "Garfield Row", miles: 7.4, fare: 19.83, minutes: 29 },
+  { when: "Mon 2:47 pm", kind: "Ride", from: "Tempe Marina Pier", to: "Maricopa Valley College", miles: 9.4, fare: 25.19, minutes: 33 },
+  { when: "Mon 2:12 pm", kind: "Ride", from: "Palo Verde Ave", to: "Cottonwood Public Library", miles: 6.7, fare: 17.96, minutes: 24 },
+  { when: "Mon 1:43 pm", kind: "Delivery", from: "Roadrunner Farmers Market", to: "Desert Willow Village", miles: 5.1, fare: 13.67, minutes: 18 },
+  { when: "Mon 1:13 pm", kind: "Ride", from: "Arcadia Town Square", to: "Valley Air Terminal", miles: 5.0, fare: 13.40, minutes: 18 },
+  { when: "Mon 12:47 pm", kind: "Delivery", from: "Saguaro Street Deli", to: "Garfield Row", miles: 6.6, fare: 17.69, minutes: 22 },
+  { when: "Mon 12:13 pm", kind: "Delivery", from: "Cactus Flats Pizza", to: "Tatum Terrace", miles: 4.7, fare: 12.60, minutes: 16 },
+  { when: "Mon 11:38 am", kind: "Ride", from: "Tempe Marina Pier", to: "Maricopa Valley College", miles: 8.2, fare: 21.98, minutes: 27 },
+  { when: "Mon 11:22 am", kind: "Delivery", from: "Saguaro Street Deli", to: "South Mountain Ridge", miles: 3.0, fare: 8.04, minutes: 12 },
+  { when: "Mon 10:49 am", kind: "Ride", from: "Arcadia Town Square", to: "Desert Sky Arena", miles: 6.9, fare: 18.49, minutes: 23 },
+  { when: "Mon 9:59 am", kind: "Ride", from: "Sonoran Executive Airfield", to: "Cholla Ridge Park", miles: 8.5, fare: 22.78, minutes: 33 },
+  { when: "Mon 9:14 am", kind: "Ride", from: "Maricopa Valley College", to: "Palo Verde Ave", miles: 6.9, fare: 18.49, minutes: 27 },
+  { when: "Mon 8:08 am", kind: "Ride", from: "Sonoran Executive Airfield", to: "Copper Canyon Hotel", miles: 15.0, fare: 40.20, minutes: 50 },
+  { when: "Mon 7:34 am", kind: "Delivery", from: "Mesa Fresh Grocer", to: "Quail Run Lane", miles: 5.5, fare: 14.74, minutes: 21 },
+  { when: "Mon 6:50 am", kind: "Ride", from: "Arcadia Town Square", to: "Valley Air Terminal", miles: 8.5, fare: 22.78, minutes: 30 },
+  { when: "Mon 6:05 am", kind: "Ride", from: "Cottonwood Public Library", to: "Camelback Corporate Plaza", miles: 9.6, fare: 25.73, minutes: 37 },
 ];
 
 /** The demo Operator's work days [Mon … Sun]: the days of DEMO_WEEK with hours. */

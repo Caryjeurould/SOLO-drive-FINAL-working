@@ -302,11 +302,14 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
   // Visitor demo: the VIN printed on the sample documents (16 characters) is
   // accepted as-is; every other VIN goes through the normal 17-character check.
   const vinOk = isValidVIN(d.vin) || (isVisitor() && d.vin === DEMO_DOCS.vehicle.vin);
+  // Visitor demo: the SSN and debit card show only their last four digits
+  // (read-only), so they are taken as entered.
+  const demoMasked = isVisitor() && d.ssn === DEMO_DOCS.ssnMasked && d.debit === DEMO_DOCS.debitMasked;
 
   const valid =
     !!d.fullName?.trim() && !!d.address?.trim() && !!d.phone && /\d{10}/.test((d.phone ?? "").replace(/\D/g, "")) &&
     !!d.vehMake && !!d.vehModel && !!d.vehYear && vinOk &&
-    !!d.autoCarrier && !!d.autoPolicy && isValidSSN(d.ssn) && luhn(d.debit) && !!d.photoDataUrl &&
+    !!d.autoCarrier && !!d.autoPolicy && (demoMasked || (isValidSSN(d.ssn) && luhn(d.debit))) && !!d.photoDataUrl &&
     licenseFrontUploaded && licenseBackUploaded && !!d.licenseExpiration;
 
   const onPhoto = (f?: File) => {
@@ -328,7 +331,7 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
         <Field label="Vehicle make"><Input value={d.vehMake ?? ""} onChange={(v) => set({ vehMake: v })} placeholder="Toyota" /></Field>
         <Field label="Vehicle model"><Input value={d.vehModel ?? ""} onChange={(v) => set({ vehModel: v })} placeholder="Camry" /></Field>
         <Field label="Year"><Input value={d.vehYear ?? ""} onChange={(v) => set({ vehYear: v })} placeholder="2022" /></Field>
-        <Field label="VIN (17 chars)" hint={d.vin && !vinOk ? "Invalid VIN format" : undefined}>
+        <Field label="VIN (17 chars)" error={d.vin && !vinOk ? "Invalid VIN format" : undefined}>
           <Input value={d.vin ?? ""} onChange={(v) => set({ vin: v.toUpperCase() })} placeholder="1HGBH41JXMN109186" />
         </Field>
 
@@ -336,10 +339,18 @@ function Stage1({ state, update, onDone }: { state: OnboardingState; update: (p:
         <Field label="Auto policy #"><Input value={d.autoPolicy ?? ""} onChange={(v) => set({ autoPolicy: v })} placeholder="A-XXXXXXXX" /></Field>
 
         <Field label="Social Security #" hint="Encrypted at rest. Last 4 visible only.">
-          <Input value={d.ssn ?? ""} onChange={(v) => set({ ssn: v })} placeholder="XXX-XX-1234" type="password" />
+          {demoMasked
+            ? <Input value={d.ssn ?? ""} onChange={() => {}} readOnly ariaLabel="Social Security #" />
+            : <Input value={d.ssn ?? ""} onChange={(v) => set({ ssn: v })} placeholder="XXX-XX-1234" type="password" />}
         </Field>
-        <Field label="Debit card #" hint={d.debit && !luhn(d.debit) ? "Card number failed checksum" : "For payouts. Tokenized."}>
-          <Input value={d.debit ?? ""} onChange={(v) => set({ debit: v })} placeholder="•••• •••• •••• 4242" />
+        <Field
+          label="Debit card #"
+          hint={d.debit && !luhn(d.debit) ? undefined : "For payouts. Tokenized."}
+          error={d.debit && !luhn(d.debit) && !demoMasked ? "Card number failed checksum" : undefined}
+        >
+          {demoMasked
+            ? <Input value={d.debit ?? ""} onChange={() => {}} readOnly ariaLabel="Debit card #" />
+            : <Input value={d.debit ?? ""} onChange={(v) => set({ debit: v })} placeholder="•••• •••• •••• 4242" />}
         </Field>
       </div>
 
@@ -664,12 +675,12 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <Field label="Legal entity name"><Input value={d.entityName ?? ""} onChange={(v) => set({ entityName: v })} placeholder="Reeves Transport LLC" /></Field>
-        <Field label="EIN" hint={d.ein && !isValidEIN(d.ein) ? "Format: 12-3456789" : undefined}>
+        <Field label="EIN" error={d.ein && !isValidEIN(d.ein) ? "Format: 12-3456789" : undefined}>
           <Input value={d.ein ?? ""} onChange={(v) => set({ ein: v })} placeholder="12-3456789" />
         </Field>
         <Field label="State of formation"><Input value={d.formationState ?? ""} onChange={(v) => set({ formationState: v })} placeholder="Delaware" /></Field>
         <Field label="Formation document">
-          {isVisitor() ? <DemoDocThumb kind="entity" label="Formation document" /> : <DocUploadButton
+          {isVisitor() ? <DemoDocThumb kind="entity" /> : <DocUploadButton
             label="formation document"
             uploaded={formationUploaded}
             uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "entity"}
@@ -709,6 +720,7 @@ function Stage4({ state, update, onDone }: { state: OnboardingState; update: (p:
         <Field label="Professional liability declarations page" full>
           <DocUploadButton
             label="professional liability declarations page"
+            uploadedLabel={isVisitor() ? "Professional liability - uploaded" : undefined}
             uploaded={profDeclarationsUploaded}
             uploading={uploadDocument.isPending && uploadDocument.variables?.documentType === "professional_insurance"}
             onPick={(file) => file && uploadDocument.mutate({ documentType: "professional_insurance", file, expirationDate: d.profInsuranceExpiration })}
@@ -794,20 +806,25 @@ function StageFooter({ valid, onContinue, labelContinue = "Continue" }: { valid:
   );
 }
 
-function Field({ label, hint, full, children }: { label: string; hint?: string; full?: boolean; children: React.ReactNode }) {
+/** `hint` is an explanation line (not shown in the visitor demo); `error` is a
+ *  validation message (always shown, in its place). */
+function Field({ label, hint, error, full, children }: { label: string; hint?: string; error?: string; full?: boolean; children: React.ReactNode }) {
+  const line = error ?? (isVisitor() ? undefined : hint);
   return (
     <div className={cn("flex min-w-0 flex-col gap-1.5", full && "md:col-span-2")}>
       <label className="text-xs uppercase tracking-widest text-muted-foreground">{label}</label>
       {children}
-      {hint && <div className="text-[11px] text-warning/90">{hint}</div>}
+      {line && <div className="text-[11px] text-warning/90">{line}</div>}
     </div>
   );
 }
-function Input({ value, onChange, placeholder, type = "text" }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+function Input({ value, onChange, placeholder, type = "text", readOnly, ariaLabel }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string; readOnly?: boolean; ariaLabel?: string }) {
   return (
     <input
       type={type}
       value={value}
+      readOnly={readOnly}
+      aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className="rounded-xl border border-border bg-input px-3 py-2.5 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
@@ -920,8 +937,10 @@ function CoverageConfirm({ name, note, limitPlaceholder = "Limit", limitHint, ta
     </div>
   );
 }
-function DocUploadButton({ label, accept, uploaded, uploading, onPick }: {
+function DocUploadButton({ label, uploadedLabel, accept, uploaded, uploading, onPick }: {
   label: string;
+  /** The green line once uploaded (default "<Label> uploaded"). */
+  uploadedLabel?: string;
   accept?: string;
   uploaded: boolean;
   uploading: boolean;
@@ -940,7 +959,7 @@ function DocUploadButton({ label, accept, uploaded, uploading, onPick }: {
         ) : (
           <Upload className="h-4 w-4 shrink-0" />
         )}
-        {uploading ? "Uploading…" : uploaded ? `${label[0].toUpperCase()}${label.slice(1)} uploaded` : `Upload ${label}`}
+        {uploading ? "Uploading…" : uploaded ? (uploadedLabel ?? `${label[0].toUpperCase()}${label.slice(1)} uploaded`) : `Upload ${label}`}
       </span>
       <input type="file" accept={accept} className="hidden" onChange={(e) => onPick(e.target.files?.[0])} />
     </label>

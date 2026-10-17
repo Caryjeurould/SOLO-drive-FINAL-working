@@ -99,7 +99,7 @@ function Vault() {
 
         <div className="mt-8 rounded-2xl border border-border bg-gradient-surface p-6 text-sm text-muted-foreground">
           Your documents are encrypted and only revealed to a customer after they tap{" "}
-          <span className="text-foreground">Verify Driver</span> at booking. You receive a notification each time a document is viewed.
+          <span className="text-foreground">Verify Driver</span> at booking.{!isVisitor() && " You receive a notification each time a document is viewed."}
         </div>
       </div>
     </AppShell>

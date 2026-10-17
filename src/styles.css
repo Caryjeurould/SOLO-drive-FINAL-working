@@ -208,6 +208,14 @@
   .csa-dot { animation: none; }
 }
 
+/* Demo dashboard: Go online flashing after the page glides back up to it.
+   Brightness and glow only (no movement), so it runs with reduced motion too. */
+@keyframes golive-flash {
+  0%, 100% { filter: brightness(1); box-shadow: var(--shadow-glow); }
+  50% { filter: brightness(1.45); box-shadow: 0 0 0 6px oklch(0.72 0.20 285 / 55%), 0 0 44px 10px oklch(0.62 0.22 275 / 70%); }
+}
+.animate-golive-flash { animation: golive-flash 1.1s ease-in-out infinite; }
+
 /* Demo Go-online panel: the flashing "Waiting on request" dot (steady with reduced motion). */
 @keyframes waiting-dot {
   0%, 100% { opacity: 1; }
