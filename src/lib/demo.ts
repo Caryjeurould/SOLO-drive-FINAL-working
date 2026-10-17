@@ -7,10 +7,9 @@ import type { User } from "@supabase/supabase-js";
 import { LEGAL_DOCS, type OnboardingState } from "@/lib/onboarding";
 import type { OperatorProfile } from "@/hooks/useOperatorProfile";
 import type { OperatorDocument } from "@/hooks/useDocuments";
-import type { OperatorShift } from "@/hooks/useOperatorShift";
 import { resetSessions } from "@/lib/onlineSessions";
 
-export const DEMO_DEFAULT_NAME = { first: "Demo", last: "Operator" };
+export const DEMO_DEFAULT_NAME = { first: "Marcus", last: "Roberts" };
 /** The daily work window the demo Operator declared (shown beside the 50-hour weekly cap). */
 export const DEMO_WORK_WINDOW_HOURS = 12;
 const DEMO_ID = "00000000-0000-4000-8000-000000000000";
@@ -61,7 +60,7 @@ export const DEMO_DOCS = {
 } as const;
 
 /** The name printed on the demo documents: the name typed on the demo name
- *  screen, or the default "Demo Operator" when it was skipped. The business is
+ *  screen, or the default "Marcus Roberts" when it was skipped. The business is
  *  "<Last> Transports - PHX LLC"; the entity's second signer is "Cheryl <Last>". */
 export function demoDocNames(first?: string, last?: string) {
   const f = first?.trim() || DEMO_DEFAULT_NAME.first;
@@ -264,7 +263,7 @@ function sampleDocuments(): DemoState["documents"] {
   };
 }
 
-/** The name screen: starts the demo as this person (blank → "Demo Operator"). */
+/** The name screen: starts the demo as this person (blank → "Marcus Roberts"). */
 export function startDemo(firstName: string, lastName: string) {
   const first = firstName.trim() || DEMO_DEFAULT_NAME.first;
   const last = lastName.trim() || DEMO_DEFAULT_NAME.last;
@@ -276,7 +275,7 @@ export function startDemo(firstName: string, lastName: string) {
     onboarding: { stage: 1, status: "in_progress", data: sampleOnboardingData(first, last) },
     documents: sampleDocuments(),
   });
-  resetSessions(demoWeekSessions());
+  resetSessions();
 }
 
 export function resetDemo() {
@@ -352,10 +351,11 @@ export function setDemoDocument(documentType: string, expirationDate?: string | 
   });
 }
 
-/** The demo dashboard's week: fixed, hand-typed numbers, the same at any day
- *  or time. Five working days, Saturday and Sunday off. [Mon … Sun] */
+/** The demo dashboard's week: fixed, hand-typed numbers. Five working days,
+ *  Saturday and Sunday off. [Mon … Sun] The hours card shows the days from
+ *  Monday through today (see demoDailyHours in routes/operator.tsx). */
 export const DEMO_WEEK = {
-  dailyHours: [8.0, 9.0, 8.5, 8.0, 9.2, 0, 0],
+  dailyHours: [7.34, 8.69, 8.12, 9.05, 9.5, 0, 0],
   /** Each day's DEMO_JOBS fares added up. */
   dailyEarnings: [358.33, 430.95, 402.54, 379.76, 434.38, 0, 0],
   earnings: 2005.96,
@@ -502,26 +502,3 @@ export const DEMO_JOBS: DemoJob[] = [
 /** The demo Operator's work days [Mon … Sun]: the days of DEMO_WEEK with hours. */
 export const DEMO_WORK_DAYS = DEMO_WEEK.dailyHours.map((h) => h > 0);
 
-/** The demo week as online sessions (the records the hours are computed from):
- *  one per work day of the current week, from 6:00 am for that day's hours. */
-function demoWeekSessions(): OperatorShift[] {
-  const monday = new Date();
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  return DEMO_WEEK.dailyHours.flatMap((hours, i) => {
-    if (!hours) return [];
-    const start = new Date(monday);
-    start.setDate(monday.getDate() + i);
-    start.setHours(6);
-    return [{
-      id: `demo-week-${i}`,
-      operator_id: DEMO_ID,
-      service_type: "both" as const,
-      started_at: start.toISOString(),
-      ended_at: new Date(start.getTime() + hours * 3_600_000).toISOString(),
-      last_lat: null,
-      last_lng: null,
-      last_location_at: null,
-    }];
-  });
-}

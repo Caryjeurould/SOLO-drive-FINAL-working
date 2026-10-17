@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
 import {
-  DEMO_ACCESS_FEE, DEMO_DOCS, DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DRIVE_VIEW, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM,
+  DEMO_ACCESS_FEE, DEMO_DEFAULT_NAME, DEMO_DOCS, DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DRIVE_VIEW, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM,
   demoBillingCycle, demoDate, markDemoGlidedBack, resetDemo, useDemoState,
 } from "@/lib/demo";
 import { MapboxMap } from "@/components/MapboxMap";
@@ -121,6 +121,20 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 /** The online map never gets shorter than this; only screens too short for it scroll. */
 const ONLINE_MAP_MIN_PX = 200;
 /** Scroll so `el` sits just under the sticky header. */
+/** Demo: [Mon … Sun] hours, the fixed DEMO_WEEK from Monday through today
+ *  (later days stay empty), plus the online sessions the visitor adds on top
+ *  (Go online → Stop), within the 10 h daily and 50 h weekly caps. */
+function demoDailyHours(sessions: { started_at: string; ended_at: string | null }[], now = new Date()) {
+  const today = (now.getDay() + 6) % 7;
+  const live = computeDailyHoursFromSessions(sessions, { workDays: DEMO_WORK_DAYS, now });
+  let week = 0;
+  return DEMO_WEEK.dailyHours.map((base, i) => {
+    const h = i > today ? 0 : Math.max(0, Math.min(base + live[i], DAILY_HOURS_CAP, WEEKLY_HOURS_CAP - week));
+    week += h;
+    return Math.round(h * 100) / 100;
+  });
+}
+
 function scrollUnderHeader(el: HTMLElement | null) {
   if (!el) return;
   const header = document.querySelector("header")?.offsetHeight ?? 0;
@@ -227,7 +241,7 @@ function OperatorDashboard() {
     if (!showMap) setRide({ phase: null, acceptedAt: null, poNumber: null });
   }, [showMap]);
   const acceptRide = () => {
-    const first = demoState.first || "Demo", last = demoState.last || "Operator";
+    const first = demoState.first || DEMO_DEFAULT_NAME.first, last = demoState.last || DEMO_DEFAULT_NAME.last;
     setRide({ phase: "csa", acceptedAt: Date.now(), poNumber: generatePoNumber(`${first[0]}${last[0]}`.toUpperCase()) });
   };
   useEffect(() => {
@@ -275,13 +289,13 @@ function OperatorDashboard() {
   const [csaJob, setCsaJob] = useState<number | null>(null);
   const closeCsa = useCallback(() => setCsaJob(null), []);
   const demoState = useDemoState();
-  const csaOperator = demoState.first ? `${demoState.first} ${(demoState.last || "O")[0]}.` : "Demo O.";
+  const csaOperator = demoState.first ? `${demoState.first} ${(demoState.last || DEMO_DEFAULT_NAME.last)[0]}.` : `${DEMO_DEFAULT_NAME.first} ${DEMO_DEFAULT_NAME.last[0]}.`;
   // Demo only: the in-demo payments screen behind "Manage billing" (nothing stored).
   const [billingOpen, setBillingOpen] = useState(false);
   const billingCardRef = useRef<HTMLDivElement>(null);
   const openBilling = () => { setBillingOpen(true); window.scrollTo({ top: 0 }); };
   const closeBilling = () => { setBillingOpen(false); requestAnimationFrame(() => billingCardRef.current?.scrollIntoView({ block: "center" })); };
-  // Demo only: once the visitor has reached the bottom of the dashboard and
+  // Demo only: once the visitor has scrolled past 75% of the dashboard and
   // nothing has moved (no scroll, no touch) for 3 s, glide back up to Go online,
   // which then flashes. An open Contracted Services pop-up or the payments
   // screen holds it (the 3 s start again after). Once per run; with reduced
@@ -291,9 +305,9 @@ function OperatorDashboard() {
   useEffect(() => {
     if (!glideArmed) return;
     let timer = 0;
-    const atBottom = () => {
+    const pastThreeQuarters = () => {
       const max = document.documentElement.scrollHeight - window.innerHeight;
-      return max > 4 && window.scrollY >= max - 2;
+      return max > 4 && window.scrollY >= max * 0.75;
     };
     const glideBack = () => {
       markDemoGlidedBack();
@@ -310,7 +324,7 @@ function OperatorDashboard() {
     };
     const restart = () => {
       window.clearTimeout(timer);
-      if (atBottom()) timer = window.setTimeout(glideBack, 3000);
+      if (pastThreeQuarters()) timer = window.setTimeout(glideBack, 3000);
     };
     const opts = { capture: true, passive: true } as const;
     const events = ["scroll", "wheel", "touchstart", "touchmove", "pointerdown", "keydown"] as const;
@@ -322,10 +336,10 @@ function OperatorDashboard() {
     };
   }, [glideArmed]);
   const hoursCap = WEEKLY_HOURS_CAP;
-  // Demo: hours come from the online sessions (Go online → Stop), as they will
-  // for real Operators; a day that isn't a demo work day gets no bar.
-  const dailyHours = demo ? computeDailyHoursFromSessions(weekShifts, { workDays: DEMO_WORK_DAYS }) : computeDailyHours(weeklyTrips);
-  const hoursLogged = Math.round(dailyHours.reduce((s, h) => s + h, 0) * 10) / 10;
+  const dailyHours = demo ? demoDailyHours(weekShifts) : computeDailyHours(weeklyTrips);
+  const hoursSum = dailyHours.reduce((s, h) => s + h, 0);
+  // Demo: rounded from whole hundredths so e.g. 24.15 shows as 24.2.
+  const hoursLogged = demo ? Math.round(Math.round(hoursSum * 100) / 10) / 10 : Math.round(hoursSum * 10) / 10;
   const hoursLeft = hoursCap - hoursLogged;
   const todayIndex = (new Date().getDay() + 6) % 7;
   const todayCapReached = demo && DEMO_WORK_DAYS[todayIndex] && dailyHours[todayIndex] >= DAILY_HOURS_CAP;
@@ -340,7 +354,7 @@ function OperatorDashboard() {
   // Demo: going online stops by itself when the daily (10 h) or weekly (50 h) cap is reached.
   useEffect(() => {
     if (!demo || !activeShift || !DEMO_WORK_DAYS[todayIndex]) return;
-    const closed = computeDailyHoursFromSessions(weekShifts.filter((s) => s.id !== activeShift.id), { workDays: DEMO_WORK_DAYS });
+    const closed = demoDailyHours(weekShifts.filter((s) => s.id !== activeShift.id));
     const leftHours = Math.min(DAILY_HOURS_CAP - closed[todayIndex], WEEKLY_HOURS_CAP - closed.reduce((s, h) => s + h, 0));
     const ms = new Date(activeShift.started_at).getTime() + leftHours * 3_600_000 - Date.now();
     const t = setTimeout(() => stopDemo(activeShift.id), Math.max(0, ms));
@@ -613,7 +627,13 @@ function OperatorDashboard() {
                 return (
                   <div key={i} className="flex flex-col items-center gap-1.5">
                     <div className="flex h-20 w-full items-end overflow-hidden rounded-md bg-muted">
-                      <div className="w-full bg-gradient-primary" style={{ height: `${Math.min(h / 10, 1) * 100}%` }} />
+                      <div className="relative w-full bg-gradient-primary" style={{ height: `${Math.min(h / 10, 1) * 100}%` }}>
+                        {demo && h > 0 && (
+                          <span data-testid="day-hours" className="absolute inset-x-0 top-1 text-center text-[9px] font-medium tabular-nums text-primary-foreground">
+                            {h.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <span className="text-[10px] text-muted-foreground">{d}</span>
                     {demo && (
