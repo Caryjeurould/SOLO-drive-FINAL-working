@@ -351,18 +351,12 @@ export function setDemoDocument(documentType: string, expirationDate?: string | 
   });
 }
 
-/** The demo dashboard's week: fixed, hand-typed numbers. Five working days,
- *  Saturday and Sunday off. [Mon … Sun] The hours card shows the days from
- *  Monday through today (see demoDailyHours in routes/operator.tsx). */
+/** The demo dashboard's week: five working days, Saturday and Sunday off.
+ *  [Mon … Sun] Each day's full hours; what the dashboard shows comes from
+ *  demoWeekSoFar (the rides that count by the clock). */
 export const DEMO_WEEK = {
   dailyHours: [7.34, 8.69, 8.12, 9.05, 9.5, 0, 0],
-  /** Each day's DEMO_JOBS fares added up. */
-  dailyEarnings: [358.33, 430.95, 402.54, 379.76, 434.38, 0, 0],
-  earnings: 2005.96,
   avgFare: 20.68,
-  trips: 97,
-  rides: 58,
-  deliveries: 39,
   ytd: 82244.36,
 };
 
@@ -498,6 +492,42 @@ export const DEMO_JOBS: DemoJob[] = [
   { when: "Mon 6:50 am", kind: "Ride", from: "Arcadia Town Square", to: "Valley Air Terminal", miles: 8.5, fare: 22.78, minutes: 30 },
   { when: "Mon 6:05 am", kind: "Ride", from: "Cottonwood Public Library", to: "Camelback Corporate Plaza", miles: 9.6, fare: 25.73, minutes: 37 },
 ];
+
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+/** Each DEMO_JOBS entry's day [Mon = 0 … Sun = 6] and start time (minutes
+ *  after midnight), read from its "Fri 5:05 pm" label. */
+const DEMO_JOB_STARTS = DEMO_JOBS.map((j) => {
+  const m = /^(\w{3}) (\d{1,2}):(\d\d) (am|pm)$/.exec(j.when)!;
+  return { day: DAY_NAMES.indexOf(m[1]), minute: ((+m[2] % 12) + (m[4] === "pm" ? 12 : 0)) * 60 + +m[3] };
+});
+
+/** The demo week by the clock, from DEMO_JOBS (the same rides every week,
+ *  Monday to Sunday): a ride counts once the clock reaches its time stamp, so
+ *  days before today are complete, today has the rides at or before now, and
+ *  later days have none. Count, list, earnings and hours all come from here.
+ *  Today's hours are its full hours × the share of its rides that count. */
+export function demoWeekSoFar(now = new Date()) {
+  const today = (now.getDay() + 6) % 7, minute = now.getHours() * 60 + now.getMinutes();
+  const jobs: number[] = []; // indexes into DEMO_JOBS, newest first
+  const cents = [0, 0, 0, 0, 0, 0, 0], done = [0, 0, 0, 0, 0, 0, 0], all = [0, 0, 0, 0, 0, 0, 0];
+  DEMO_JOB_STARTS.forEach(({ day, minute: start }, i) => {
+    all[day]++;
+    if (day > today || (day === today && start > minute)) return;
+    jobs.push(i);
+    done[day]++;
+    cents[day] += Math.round(DEMO_JOBS[i].fare * 100);
+  });
+  const rides = jobs.filter((i) => DEMO_JOBS[i].kind === "Ride").length;
+  return {
+    jobs,
+    rides,
+    deliveries: jobs.length - rides,
+    dailyEarnings: cents.map((c) => c / 100),
+    earnings: cents.reduce((s, c) => s + c, 0) / 100,
+    dailyHours: DEMO_WEEK.dailyHours.map((h, d) =>
+      d < today ? h : d > today || !all[d] ? 0 : Math.round((h * done[d] * 100) / all[d]) / 100),
+  };
+}
 
 /** The demo Operator's work days [Mon … Sun]: the days of DEMO_WEEK with hours. */
 export const DEMO_WORK_DAYS = DEMO_WEEK.dailyHours.map((h) => h > 0);

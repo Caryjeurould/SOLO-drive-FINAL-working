@@ -16,7 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
 import {
   DEMO_ACCESS_FEE, DEMO_DEFAULT_NAME, DEMO_DOCS, DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DRIVE_VIEW, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM,
-  demoBillingCycle, demoDate, markDemoGlidedBack, resetDemo, useDemoState,
+  demoBillingCycle, demoDate, demoWeekSoFar, markDemoGlidedBack, resetDemo, useDemoState,
 } from "@/lib/demo";
 import { MapboxMap } from "@/components/MapboxMap";
 import { Pill, generatePoNumber } from "@/components/SmartRateBooking";
@@ -120,21 +120,20 @@ async function fetchApproxArea(): Promise<[number, number] | null> {
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 /** The online map never gets shorter than this; only screens too short for it scroll. */
 const ONLINE_MAP_MIN_PX = 200;
-/** Scroll so `el` sits just under the sticky header. */
-/** Demo: [Mon … Sun] hours, the fixed DEMO_WEEK from Monday through today
- *  (later days stay empty), plus the online sessions the visitor adds on top
- *  (Go online → Stop), within the 10 h daily and 50 h weekly caps. */
+/** Demo: [Mon … Sun] hours, the week so far by the clock (demoWeekSoFar),
+ *  plus the online sessions the visitor adds on top (Go online → Stop),
+ *  within the 10 h daily and 50 h weekly caps. */
 function demoDailyHours(sessions: { started_at: string; ended_at: string | null }[], now = new Date()) {
-  const today = (now.getDay() + 6) % 7;
   const live = computeDailyHoursFromSessions(sessions, { workDays: DEMO_WORK_DAYS, now });
   let week = 0;
-  return DEMO_WEEK.dailyHours.map((base, i) => {
-    const h = i > today ? 0 : Math.max(0, Math.min(base + live[i], DAILY_HOURS_CAP, WEEKLY_HOURS_CAP - week));
+  return demoWeekSoFar(now).dailyHours.map((base, i) => {
+    const h = Math.max(0, Math.min(base + live[i], DAILY_HOURS_CAP, WEEKLY_HOURS_CAP - week));
     week += h;
     return Math.round(h * 100) / 100;
   });
 }
 
+/** Scroll so `el` sits just under the sticky header. */
 function scrollUnderHeader(el: HTMLElement | null) {
   if (!el) return;
   const header = document.querySelector("header")?.offsetHeight ?? 0;
@@ -335,6 +334,15 @@ function OperatorDashboard() {
       events.forEach((e) => window.removeEventListener(e, restart, opts));
     };
   }, [glideArmed]);
+  // Demo: the dashboard follows the clock (a ride counts once its time stamp
+  // is reached), so it is worked out again every 30 s.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    if (!demo) return;
+    const t = window.setInterval(() => setClockTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(t);
+  }, [demo]);
+  const week = demo ? demoWeekSoFar() : null;
   const hoursCap = WEEKLY_HOURS_CAP;
   const dailyHours = demo ? demoDailyHours(weekShifts) : computeDailyHours(weeklyTrips);
   const hoursSum = dailyHours.reduce((s, h) => s + h, 0);
@@ -362,13 +370,8 @@ function OperatorDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demo, activeShift?.id, weekShifts, todayIndex]);
 
-  // Demo: the earnings total adds up the days shown on the hours card (Monday through today).
-  const { total: weekEarnings, avg: avgFare, count: tripCount } = demo
-    ? {
-        total: Math.round(DEMO_WEEK.dailyEarnings.slice(0, todayIndex + 1).reduce((s, e) => s + e, 0) * 100) / 100,
-        avg: DEMO_WEEK.avgFare,
-        count: DEMO_WEEK.trips,
-      }
+  const { total: weekEarnings, avg: avgFare, count: tripCount } = week
+    ? { total: week.earnings, avg: DEMO_WEEK.avgFare, count: week.jobs.length }
     : computeWeeklyEarnings(weeklyTrips);
   const money = (n: number) =>
     demo ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${n.toFixed(2)}`;
@@ -643,8 +646,8 @@ function OperatorDashboard() {
                     <span className="text-[10px] text-muted-foreground">{d}</span>
                     {demo && (
                       <span className="text-[10px] text-muted-foreground">
-                        {/* A work day that hasn't happened yet keeps the line's height but shows no earnings. */}
-                        {!DEMO_WEEK.dailyEarnings[i] ? "Off" : i <= todayIndex ? `$${Math.round(DEMO_WEEK.dailyEarnings[i])}` : " "}
+                        {/* No rides yet that day: the line keeps its height but stays blank. */}
+                        {!DEMO_WORK_DAYS[i] ? "Off" : week!.dailyEarnings[i] ? `$${Math.round(week!.dailyEarnings[i])}` : " "}
                       </span>
                     )}
                   </div>
@@ -662,7 +665,7 @@ function OperatorDashboard() {
             icon={<CheckCircle2 className="h-4 w-4" />}
             label="Rides & deliveries this week"
             value={String(tripCount)}
-            sub={demo ? `${DEMO_WEEK.rides} rides · ${DEMO_WEEK.deliveries} deliveries` : undefined}
+            sub={week ? `${week.rides} rides · ${week.deliveries} deliveries` : undefined}
           />
           {demo && (
             <div className="rounded-2xl border border-amber-300/30 bg-amber-300/5 p-5 shadow-card">
@@ -711,11 +714,13 @@ function OperatorDashboard() {
           <div className="min-w-0 rounded-3xl border border-border bg-card p-6 shadow-card">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-xl">{demo ? "Recent rides & deliveries" : "Recent trips"}</h3>
-              <span className="text-xs text-muted-foreground">Last {demo ? DEMO_JOBS.length : recentTrips.length}</span>
+              <span className="text-xs text-muted-foreground">{week ? "This week" : `Last ${recentTrips.length}`}</span>
             </div>
-            {demo ? (
+            {week && week.jobs.length === 0 ? (
+              <p data-testid="demo-jobs-empty" className="mt-6 py-6 text-center text-sm text-muted-foreground">No rides yet this week</p>
+            ) : week ? (
               <div data-testid="demo-jobs" className="mt-4 max-h-80 divide-y divide-border overflow-y-auto overscroll-contain scroll-smooth pr-1">
-                {DEMO_JOBS.map((j, i) => (
+                {week.jobs.map((i) => [i, DEMO_JOBS[i]] as const).map(([i, j]) => (
                   <div key={i} className="flex items-center justify-between gap-3 py-3 text-sm">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
