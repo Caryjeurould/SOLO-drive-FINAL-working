@@ -362,8 +362,13 @@ function OperatorDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demo, activeShift?.id, weekShifts, todayIndex]);
 
+  // Demo: the earnings total adds up the days shown on the hours card (Monday through today).
   const { total: weekEarnings, avg: avgFare, count: tripCount } = demo
-    ? { total: DEMO_WEEK.earnings, avg: DEMO_WEEK.avgFare, count: DEMO_WEEK.trips }
+    ? {
+        total: Math.round(DEMO_WEEK.dailyEarnings.slice(0, todayIndex + 1).reduce((s, e) => s + e, 0) * 100) / 100,
+        avg: DEMO_WEEK.avgFare,
+        count: DEMO_WEEK.trips,
+      }
     : computeWeeklyEarnings(weeklyTrips);
   const money = (n: number) =>
     demo ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${n.toFixed(2)}`;
