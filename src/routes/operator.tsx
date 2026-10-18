@@ -638,7 +638,8 @@ function OperatorDashboard() {
                     <span className="text-[10px] text-muted-foreground">{d}</span>
                     {demo && (
                       <span className="text-[10px] text-muted-foreground">
-                        {DEMO_WEEK.dailyEarnings[i] ? `$${Math.round(DEMO_WEEK.dailyEarnings[i])}` : "Off"}
+                        {/* A work day that hasn't happened yet keeps the line's height but shows no earnings. */}
+                        {!DEMO_WEEK.dailyEarnings[i] ? "Off" : i <= todayIndex ? `$${Math.round(DEMO_WEEK.dailyEarnings[i])}` : " "}
                       </span>
                     )}
                   </div>
