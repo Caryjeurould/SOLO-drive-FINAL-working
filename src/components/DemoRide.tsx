@@ -3,9 +3,9 @@
 // from the website simulation's pieces (route map, booking-card fields, trip
 // rows, Contracted Services card). Nothing here is real or saved.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowRight, ArrowUp, ArrowUpLeft, ArrowUpRight, Clock, CornerUpLeft, CornerUpRight, Flag, Navigation, Undo2, User } from "lucide-react";
+import { ArrowRight, ArrowUp, ArrowUpLeft, ArrowUpRight, Clock, CornerUpLeft, CornerUpRight, Flag, Navigation, Undo2, User, X } from "lucide-react";
 import { MapboxMap, type RouteStep } from "@/components/MapboxMap";
-import { ContractedServicesCard, DisplayField, Pill, Row, csaAgreementText, formatTime } from "@/components/SmartRateBooking";
+import { ContractedServicesCard, Pill, Row, csaAgreementText, formatTime } from "@/components/SmartRateBooking";
 import { BrandText } from "@/components/BrandText";
 import { DEMO_RIDE, DRIVE_VIEW } from "@/lib/demo";
 import { cn } from "@/lib/utils";
@@ -57,7 +57,7 @@ function turnDistance(mi: number) {
 }
 
 export function DemoRideScreen({
-  phase, operatorName, acceptedAt, poNumber, progress, reduced, onAccept,
+  phase, operatorName, acceptedAt, poNumber, progress, reduced, onAccept, onDecline,
 }: {
   phase: RidePhase;
   operatorName: string;
@@ -66,6 +66,7 @@ export function DemoRideScreen({
   progress: number;
   reduced: boolean;
   onAccept: () => void;
+  onDecline: () => void;
 }) {
   const r = DEMO_RIDE;
   const left = phase === "drive" ? 1 - progress : 1;
@@ -109,6 +110,32 @@ export function DemoRideScreen({
   }, [phase, reduced]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [phase === "offer" || phase === "drive" || phase === "thanks" ? phase : null]);
 
+  // The offer fills the screen under the header (fixed, so nothing scrolls):
+  // the map takes whatever height the rows and Accept leave. Accept counts down
+  // the auto-accept time (DEMO_RIDE.autoAcceptMs, run by the dashboard) as a
+  // fill with the seconds shown; with reduced motion the fill moves per second.
+  const offer = phase === "offer";
+  const [headerPx, setHeaderPx] = useState(64);
+  useLayoutEffect(() => {
+    if (!offer) return;
+    const measure = () => setHeaderPx(document.querySelector("header")?.getBoundingClientRect().height ?? 64);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [offer]);
+  const [offerMs, setOfferMs] = useState(0);
+  useEffect(() => {
+    if (!offer) return;
+    const start = Date.now();
+    setOfferMs(0);
+    const t = window.setInterval(() => setOfferMs(Math.min(r.autoAcceptMs, Date.now() - start)), 100);
+    return () => window.clearInterval(t);
+  }, [offer, r.autoAcceptMs]);
+  const secondsLeft = Math.ceil((r.autoAcceptMs - offerMs) / 1000);
+  const fill = (reduced ? Math.floor(offerMs / 1000) * 1000 : offerMs) / r.autoAcceptMs;
+  // Side gutters: 16px on phones, the content centred at max-w-3xl on wide screens.
+  const gutter = "max(16px, calc((100vw - 48rem) / 2 + 16px))";
+
   if (phase === "thanks") {
     return (
       <div className="mx-auto flex min-h-[70svh] max-w-3xl items-center justify-center px-6 text-center">
@@ -127,64 +154,81 @@ export function DemoRideScreen({
       className={inGuidance
         // The Mapbox logo moves up to just above the bottom card.
         ? "fixed inset-x-0 top-0 z-[60] h-[100svh] overflow-hidden bg-background [&_.mapboxgl-ctrl-bottom-left]:!bottom-[var(--guide-logo)]"
-        : "mx-auto max-w-3xl px-4 py-4 md:px-8"}
-      style={inGuidance ? ({ "--guide-logo": `${bottomPx - 60}px` } as React.CSSProperties) : undefined}
+        : offer
+          ? "fixed inset-x-0 bottom-0 z-20 flex flex-col gap-2 overflow-hidden bg-background pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+          : "mx-auto max-w-3xl px-4 py-4 md:px-8"}
+      style={inGuidance
+        ? ({ "--guide-logo": `${bottomPx - 60}px` } as React.CSSProperties)
+        : offer ? { top: headerPx, paddingLeft: gutter, paddingRight: gutter } : undefined}
     >
-      {phase === "offer" && (
-        <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-primary-glow">
-          <span className={cn("h-2 w-2 rounded-full bg-success", !reduced && "animate-pulse")} /> New ride request
-        </div>
+      {offer && (
+        <>
+          {/* On the map: the request label (top left) and Decline (top right). */}
+          <div className="pointer-events-none absolute z-10 flex items-center gap-1.5 rounded-full bg-background/85 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-primary-glow backdrop-blur" style={{ top: 20, left: `calc(${gutter} + 8px)` }}>
+            <span className={cn("h-1.5 w-1.5 rounded-full bg-success", !reduced && "animate-pulse")} /> New ride request
+          </div>
+          <button
+            type="button"
+            data-testid="demo-offer-decline"
+            onClick={onDecline}
+            className="absolute z-10 inline-flex items-center gap-1 rounded-full border border-border bg-background/85 px-3 py-1.5 text-xs font-medium backdrop-blur hover:bg-secondary"
+            style={{ top: 16, right: `calc(${gutter} + 8px)` }}
+          >
+            <X className="h-3.5 w-3.5" /> Decline
+          </button>
+        </>
       )}
       {/* The same map through every step, so the route stays drawn. */}
       <MapboxMap
-        className={inGuidance ? "h-full w-full [&>div]:rounded-none" : "h-[40svh] min-h-[200px] w-full"}
+        className={inGuidance ? "h-full w-full [&>div]:rounded-none" : offer ? "min-h-[96px] w-full flex-1" : "h-[40svh] min-h-[200px] w-full"}
         pickupAddress={r.pickup}
         dropoffAddress={r.dropoff}
-        tripProgress={phase === "drive" ? progress : null}
-        onRouteSteps={guidance ? setSteps : undefined}
+        tripProgress={phase === "drive" ? progress : offer && steps.length ? 0 : null}
+        // The offer shows the car once the route is in (steps arrive with it).
+        onRouteSteps={guidance || offer ? setSteps : undefined}
         driveView={inGuidance ? { bottomPx, reduced } : null}
       />
 
       {phase === "offer" ? (
-        <div data-testid="demo-offer" className="mt-4 rounded-3xl border border-border bg-gradient-surface p-5 shadow-elevated">
-          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Where to?</div>
-          <div className="mt-3 space-y-2">
-            <DisplayField icon={<span className="h-2.5 w-2.5 rounded-full bg-primary-glow" />} label="Pickup" value={r.pickup} />
-            <DisplayField icon={<span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />} label="Drop-off" value={r.dropoff} />
+        <div data-testid="demo-offer" className="flex shrink-0 flex-col gap-2">
+          <div className="rounded-xl border border-border bg-surface px-3 py-1.5 text-[13px]">
+            <div data-testid="demo-offer-pickup" className="flex min-w-0 items-center gap-2">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-primary-glow" />
+              <span className="w-[52px] shrink-0 text-[10px] uppercase tracking-widest text-muted-foreground">Pickup</span>
+              <span className="truncate">{r.pickup}</span>
+            </div>
+            <div data-testid="demo-offer-dropoff" className="mt-1 flex min-w-0 items-center gap-2">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-400" />
+              <span className="w-[52px] shrink-0 text-[10px] uppercase tracking-widest text-muted-foreground">Drop-off</span>
+              <span className="truncate">{r.dropoff}</span>
+            </div>
           </div>
-          <div data-testid="demo-offer-pickup-distance" className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <Navigation className="h-3.5 w-3.5" /> Pickup is {r.pickupMi.toFixed(1)} mi from you
+          <div data-testid="demo-offer-trip" className="flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><Flag className="h-3.5 w-3.5" /> {r.tripMi.toFixed(1)} mi · {r.tripMin} min</span>
+            <span data-testid="demo-offer-pickup-distance" className="inline-flex items-center gap-1.5"><Navigation className="h-3.5 w-3.5" /> Pickup {r.pickupMi.toFixed(1)} mi · {r.operatorEtaMin} min</span>
           </div>
 
           {/* Where the website shows the Operator, the Operator sees the Customer. */}
-          <div className="mt-4 rounded-2xl border border-border bg-card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-primary font-display text-lg font-semibold text-primary-foreground">
-                {r.customer.charAt(0)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span data-testid="demo-offer-customer" className="font-medium">{r.customer}</span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary-glow">
-                    <User className="h-3 w-3" /> Customer
-                  </span>
-                </div>
-              </div>
+          <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-1.5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-primary font-display text-sm font-semibold text-primary-foreground">
+              {r.customer.charAt(0)}
             </div>
+            <span data-testid="demo-offer-customer" className="text-sm font-medium">{r.customer}</span>
+            <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] text-success">Verified ✓</span>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+          <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[10px] uppercase tracking-widest text-primary-glow"><BrandText>Smart+Rate™ · locked</BrandText></div>
-                <div data-testid="demo-offer-total" className="mt-1 font-display text-4xl font-semibold">${r.rate.total.toFixed(2)}</div>
+                <div data-testid="demo-offer-total" className="font-display text-3xl font-semibold leading-tight">${r.rate.total.toFixed(2)}</div>
               </div>
               <div className="text-right text-xs text-muted-foreground">
                 ×{r.rate.multiplier.toFixed(2)} multiplier<br />
                 100% to operator
               </div>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <div data-testid="demo-offer-breakdown" className="mt-1.5 grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-0.5 text-[11px] leading-4 text-muted-foreground">
               <Row k="Base" v={`$${r.rate.base.toFixed(2)}`} />
               <Row k="Distance" v={`$${r.rate.distance.toFixed(2)}`} />
               <Row k="Fuel index" v={`+$${r.rate.fuelAdj.toFixed(2)}`} />
@@ -194,14 +238,17 @@ export function DemoRideScreen({
             </div>
           </div>
 
+          {/* Accept, with the auto-accept countdown as a fill and the seconds left. */}
           <button
+            type="button"
+            data-testid="demo-offer-accept"
             onClick={onAccept}
-            className={cn(
-              "mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-glow",
-              !reduced && "animate-verify-attention",
-            )}
+            className="relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-glow"
           >
-            Accept ride · ${r.rate.total.toFixed(2)} <ArrowRight className="h-4 w-4" />
+            <span data-testid="demo-offer-countdown-fill" aria-hidden="true" className="absolute inset-y-0 left-0 bg-white/20" style={{ width: `${fill * 100}%` }} />
+            <span className="relative">Accept · ${r.rate.total.toFixed(2)}</span>
+            <ArrowRight className="relative h-4 w-4" />
+            <span data-testid="demo-offer-countdown" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/25 px-2 py-0.5 text-xs tabular-nums">{secondsLeft}s</span>
           </button>
         </div>
       ) : inGuidance ? (

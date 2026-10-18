@@ -243,6 +243,9 @@ function OperatorDashboard() {
     const first = demoState.first || DEMO_DEFAULT_NAME.first, last = demoState.last || DEMO_DEFAULT_NAME.last;
     setRide({ phase: "csa", acceptedAt: Date.now(), poNumber: generatePoNumber(`${first[0]}${last[0]}`.toUpperCase()) });
   };
+  // Decline: the offer closes and the online view waits again; the next offer
+  // comes after the usual few seconds.
+  const declineRide = () => setRide({ phase: null, acceptedAt: null, poNumber: null });
   useEffect(() => {
     if (!showMap) return;
     const after = (ms: number, fn: () => void) => { const t = window.setTimeout(fn, ms); return () => window.clearTimeout(t); };
@@ -406,6 +409,7 @@ function OperatorDashboard() {
           progress={rideProgress}
           reduced={rideReduced}
           onAccept={acceptRide}
+          onDecline={declineRide}
         />
       ) : (
       <div className="mx-auto max-w-7xl px-4 py-10 md:px-8">
