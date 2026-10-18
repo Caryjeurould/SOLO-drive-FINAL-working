@@ -233,7 +233,7 @@ function OperatorDashboard() {
   // cancels whatever is pending (every timer below is cleared on cleanup).
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [ride, setRide] = useState<{ phase: RidePhase | null; acceptedAt: number | null; poNumber: string | null }>({ phase: null, acceptedAt: null, poNumber: null });
+  const [ride, setRide] = useState<{ phase: RidePhase | null; acceptedAt: number | null; poNumber: string | null; leaving?: boolean }>({ phase: null, acceptedAt: null, poNumber: null });
   const [rideProgress, setRideProgress] = useState(0);
   const rideReduced = typeof window !== "undefined" && reducedMotion();
   useEffect(() => {
@@ -249,36 +249,50 @@ function OperatorDashboard() {
   useEffect(() => {
     if (!showMap) return;
     const after = (ms: number, fn: () => void) => { const t = window.setTimeout(fn, ms); return () => window.clearTimeout(t); };
+    // Every step fades in, then holds, before its own time starts.
+    const lead = DEMO_RIDE.phaseFadeMs + DEMO_RIDE.phaseHoldMs;
     switch (ride.phase) {
       case null:
-        return after(DEMO_RIDE.offerAfterMs, () => { playChime(); setRide((r) => ({ ...r, phase: "offer" })); });
+        return after(DEMO_RIDE.offerAfterMs, () => { playChime(); setRide((r) => ({ ...r, phase: "request" })); });
+      case "request":
+        return after(lead + DEMO_RIDE.requestMs, () => setRide((r) => ({ ...r, phase: "offer" })));
       case "offer":
-        return after(DEMO_RIDE.autoAcceptMs, acceptRide);
+        return after(lead + DEMO_RIDE.autoAcceptMs, acceptRide);
       case "csa":
-        return after(DEMO_RIDE.csaMs, () => { setRideProgress(0); setRide((r) => ({ ...r, phase: "drive" })); });
+        return after(lead + DEMO_RIDE.csaMs, () => { setRideProgress(0); setRide((r) => ({ ...r, phase: "drive" })); });
       case "drive": {
-        // The car and the countdown follow the clock; with reduced motion they jump in quarter steps.
-        const start = performance.now();
+        // The car and the countdown follow the clock (from the end of the step's
+        // fade-in and hold); with reduced motion they jump in quarter steps.
+        const start = performance.now() + lead;
         let raf = 0;
         const tick = () => {
-          const p = Math.min(1, (performance.now() - start) / (DRIVE_VIEW === "guidance" ? DEMO_RIDE.guidanceDriveMs : DEMO_RIDE.driveMs));
+          const p = Math.max(0, Math.min(1, (performance.now() - start) / (DRIVE_VIEW === "guidance" ? DEMO_RIDE.guidanceDriveMs : DEMO_RIDE.driveMs)));
           setRideProgress(rideReduced && p < 1 ? Math.floor(p * 4) / 4 : p);
-          if (p >= 1) setRide((r) => ({ ...r, phase: "thanks" }));
+          if (p >= 1) setRide((r) => ({ ...r, phase: "complete" }));
           else raf = requestAnimationFrame(tick);
         };
         raf = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf);
       }
-      case "thanks":
-        return after(DEMO_RIDE.thanksMs, () => {
-          // Start over: back to the name screen, then forget everything (name,
-          // online session, hours, the map's area and every cached answer).
-          setDemoArea(null);
-          navigate({ to: "/operator/demo", replace: true }).then(() => {
-            resetDemo();
-            queryClient.clear();
-          });
-        });
+      case "complete":
+        return after(lead + DEMO_RIDE.completeMs, () => setRide((r) => ({ ...r, phase: "thanks" })));
+      case "thanks": {
+        // The closing line fades out, then the demo starts over: back to the name
+        // screen, then forget everything (name, online session, hours, the map's
+        // area and every cached answer).
+        let t2 = 0;
+        const t1 = window.setTimeout(() => {
+          setRide((r) => ({ ...r, leaving: true }));
+          t2 = window.setTimeout(() => {
+            setDemoArea(null);
+            navigate({ to: "/operator/demo", replace: true }).then(() => {
+              resetDemo();
+              queryClient.clear();
+            });
+          }, DEMO_RIDE.phaseFadeMs);
+        }, lead + DEMO_RIDE.thanksMs);
+        return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMap, ride.phase]);
@@ -408,6 +422,7 @@ function OperatorDashboard() {
           poNumber={ride.poNumber}
           progress={rideProgress}
           reduced={rideReduced}
+          leaving={!!ride.leaving}
           onAccept={acceptRide}
           onDecline={declineRide}
         />

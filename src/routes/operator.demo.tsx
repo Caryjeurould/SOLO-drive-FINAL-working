@@ -33,7 +33,7 @@ function DemoNameScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 py-12">
+    <div className="demo-step-in min-h-screen bg-background px-4 py-12">
       <div className="absolute inset-0 bg-gradient-hero opacity-40" />
       <div className="relative mx-auto flex min-h-[80vh] max-w-md flex-col justify-center">
         <div className="flex flex-col items-center gap-3 text-center">

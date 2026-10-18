@@ -10,7 +10,7 @@ import { BrandText } from "@/components/BrandText";
 import { DEMO_RIDE, DRIVE_VIEW } from "@/lib/demo";
 import { cn } from "@/lib/utils";
 
-export type RidePhase = "offer" | "csa" | "drive" | "thanks";
+export type RidePhase = "request" | "offer" | "csa" | "drive" | "complete" | "thanks";
 
 /** Two short, soft beeps with a short gap, made with Web Audio (no audio file). Silent if audio isn't available or is blocked. */
 export function playChime() {
@@ -57,7 +57,7 @@ function turnDistance(mi: number) {
 }
 
 export function DemoRideScreen({
-  phase, operatorName, acceptedAt, poNumber, progress, reduced, onAccept, onDecline,
+  phase, operatorName, acceptedAt, poNumber, progress, reduced, leaving, onAccept, onDecline,
 }: {
   phase: RidePhase;
   operatorName: string;
@@ -65,6 +65,8 @@ export function DemoRideScreen({
   poNumber: string | null;
   progress: number;
   reduced: boolean;
+  /** The last step is fading out before the reset. */
+  leaving: boolean;
   onAccept: () => void;
   onDecline: () => void;
 }) {
@@ -103,12 +105,17 @@ export function DemoRideScreen({
   // magnify; with reduced motion only its glow).
   const csaRef = useRef<HTMLDivElement>(null);
   const [magnify, setMagnify] = useState(false);
+  // Each step fades in, then holds before anything on it starts (DEMO_RIDE.phaseFadeMs + phaseHoldMs).
+  const lead = r.phaseFadeMs + r.phaseHoldMs;
   useEffect(() => {
     if (phase !== "csa") return;
-    csaRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
-    setMagnify(true);
-  }, [phase, reduced]);
-  useEffect(() => { window.scrollTo({ top: 0 }); }, [phase === "offer" || phase === "drive" || phase === "thanks" ? phase : null]);
+    const t = window.setTimeout(() => {
+      csaRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
+      setMagnify(true);
+    }, lead);
+    return () => window.clearTimeout(t);
+  }, [phase, reduced, lead]);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [phase === "csa" ? null : phase]);
 
   // The offer fills the screen under the header (fixed, so nothing scrolls):
   // the map takes whatever height the rows and Accept leave. Accept counts down
@@ -117,28 +124,73 @@ export function DemoRideScreen({
   const offer = phase === "offer";
   const [headerPx, setHeaderPx] = useState(64);
   useLayoutEffect(() => {
-    if (!offer) return;
     const measure = () => setHeaderPx(document.querySelector("header")?.getBoundingClientRect().height ?? 64);
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [offer]);
+  }, []);
+  // The countdown starts after the offer's fade-in and hold, like the auto-accept timer.
   const [offerMs, setOfferMs] = useState(0);
   useEffect(() => {
     if (!offer) return;
-    const start = Date.now();
+    const start = Date.now() + lead;
     setOfferMs(0);
-    const t = window.setInterval(() => setOfferMs(Math.min(r.autoAcceptMs, Date.now() - start)), 100);
+    const t = window.setInterval(() => setOfferMs(Math.max(0, Math.min(r.autoAcceptMs, Date.now() - start))), 100);
     return () => window.clearInterval(t);
-  }, [offer, r.autoAcceptMs]);
+  }, [offer, r.autoAcceptMs, lead]);
   const secondsLeft = Math.ceil((r.autoAcceptMs - offerMs) / 1000);
   const fill = (reduced ? Math.floor(offerMs / 1000) * 1000 : offerMs) / r.autoAcceptMs;
   // Side gutters: 16px on phones, the content centred at max-w-3xl on wide screens.
   const gutter = "max(16px, calc((100vw - 48rem) / 2 + 16px))";
 
+  // The fade between steps: a curtain in the page's background colour that clears
+  // over 0.4 s each time the step changes (and closes before the reset). Below the
+  // header, except on the full-screen drive.
+  const curtain = (
+    <div
+      key={leaving ? "leaving" : phase}
+      data-testid="demo-curtain"
+      aria-hidden="true"
+      className={cn("pointer-events-none fixed inset-x-0 bottom-0 z-[65] bg-background", leaving ? "demo-curtain-out" : "demo-curtain-in")}
+      style={{ top: inGuidance ? 0 : headerPx }}
+    />
+  );
+
+  if (phase === "request") {
+    return (
+      <div className="mx-auto flex min-h-[70svh] max-w-3xl flex-col items-center justify-center gap-4 px-6 text-center">
+        {curtain}
+        <div className="relative flex h-16 w-16 items-center justify-center">
+          {!reduced && <span className="absolute inset-0 animate-ping rounded-full bg-primary/30" />}
+          <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground shadow-glow"><Navigation className="h-6 w-6" /></span>
+        </div>
+        <div data-testid="demo-request">
+          <div className="text-xs uppercase tracking-[0.2em] text-primary-glow">Incoming ride request</div>
+          <div className="mt-2 font-display text-2xl font-semibold">{r.customer}</div>
+          <div className="mt-1 text-sm text-muted-foreground">Pickup {r.pickupMi.toFixed(1)} mi away</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "complete") {
+    return (
+      <div className="mx-auto flex min-h-[70svh] max-w-3xl flex-col items-center justify-center gap-3 px-6 text-center">
+        {curtain}
+        <div data-testid="demo-complete">
+          <div className="text-xs uppercase tracking-[0.2em] text-success">Trip complete</div>
+          <div className="mt-3 text-sm text-muted-foreground">You earned</div>
+          <div data-testid="demo-complete-fare" className="font-display text-5xl font-semibold">${r.rate.total.toFixed(2)}</div>
+          <div className="mt-2 text-sm text-muted-foreground">100% to operator · {r.customer} · {r.tripMi.toFixed(1)} mi</div>
+        </div>
+      </div>
+    );
+  }
+
   if (phase === "thanks") {
     return (
       <div className="mx-auto flex min-h-[70svh] max-w-3xl items-center justify-center px-6 text-center">
+        {curtain}
         <p data-testid="demo-thanks" className="font-display text-2xl font-semibold leading-snug">
           Thanks for experiencing the SOLO.drive DEMO
         </p>
@@ -161,6 +213,7 @@ export function DemoRideScreen({
         ? ({ "--guide-logo": `${bottomPx - 60}px` } as React.CSSProperties)
         : offer ? { top: headerPx, paddingLeft: gutter, paddingRight: gutter } : undefined}
     >
+      {curtain}
       {offer && (
         <>
           {/* On the map: the request label (top left) and Decline (top right). */}

@@ -216,6 +216,20 @@
 }
 .animate-golive-flash { animation: golive-flash 1.1s ease-in-out infinite; }
 
+/* Demo ride steps: each new step fades up from the page background over 0.4 s
+   (a curtain over the screen that clears), and the last one fades out before
+   the reset. None with reduced motion. */
+@keyframes demo-curtain-clear { from { opacity: 1; } to { opacity: 0; } }
+@keyframes demo-curtain-close { from { opacity: 0; } to { opacity: 1; } }
+.demo-curtain-in { animation: demo-curtain-clear 0.4s ease-out forwards; }
+.demo-curtain-out { animation: demo-curtain-close 0.4s ease-in forwards; }
+@keyframes demo-step-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.demo-step-in { animation: demo-step-in 0.4s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .demo-curtain-in, .demo-curtain-out { display: none; }
+  .demo-step-in { animation: none; }
+}
+
 /* Demo Go-online panel: the flashing "Waiting on request" dot (steady with reduced motion). */
 @keyframes waiting-dot {
   0%, 100% { opacity: 1; }

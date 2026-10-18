@@ -120,15 +120,25 @@ export const DEMO_RIDE = {
   tripMi: 16.6,
   tripMin: 29,
   rate: { base: 4.5, distance: 27.1, fuelAdj: 2.9, peakAdj: 0, weekendAdj: 0, eventAdj: 0, total: 34.5, multiplier: 1.09 },
+  /** Online and waiting, until the request comes in (two soft beeps). */
   offerAfterMs: 5000,
-  autoAcceptMs: 6000,
+  /** Every ride step fades in over phaseFadeMs, then holds phaseHoldMs before
+   *  anything on it starts or advances; the times below run after that. */
+  phaseFadeMs: 400,
+  phaseHoldMs: 1000,
+  /** "Incoming ride request", then the offer. */
+  requestMs: 2600,
+  /** The offer's countdown: Accept, or auto-accept at zero. */
+  autoAcceptMs: 10000,
   /** The Contracted Services card grows and settles back (6.2 s), then the drive starts. */
-  csaMs: 6600,
+  csaMs: 8600,
   /** The drive in the "classic" view (map + Distance / Trip ETA / Arrival rows). */
   driveMs: 13000,
   /** The drive in the "guidance" view (turn-by-turn navigation screen). */
   guidanceDriveMs: 20000,
-  thanksMs: 2500,
+  /** "Trip complete" with the earnings, then the closing line, then the reset. */
+  completeMs: 7100,
+  thanksMs: 4500,
 };
 /** Which drive screen the demo ride shows after the Contracted Services card:
  *  "guidance" = full-screen navigation (tilted map following the car, turn
