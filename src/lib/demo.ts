@@ -143,8 +143,8 @@ export const DEMO_RIDE = {
   /** The drive in the "guidance" view (turn-by-turn navigation screen). */
   guidanceDriveMs: 20000,
   /** "Trip complete" with the earnings, then the closing line, then the reset. */
-  completeMs: 7100,
-  thanksMs: 4500,
+  completeMs: 3600,
+  thanksMs: 2700,
 };
 /** Which drive screen the demo ride shows after the Contracted Services card:
  *  "guidance" = full-screen navigation (tilted map following the car, turn

@@ -42,21 +42,27 @@ type Props = {
    *  with the car `bottomPx` above the map's bottom edge, drawn as a top-down
    *  car. `reduced`: no tilt/glide, instant turns. Unset everywhere else. */
   driveView?: { bottomPx: number; reduced: boolean } | null;
-  /** Operator demo ride: the colour of the route line and of the car drawn by
-   *  `tripProgress` (e.g. green on the way to the pickup). Defaults to the
-   *  usual purple, so other maps are unchanged. */
-  routeColor?: string;
-  /** Operator demo ride offer: draw the Operator's car parked at this address
-   *  (and keep it in view). Unset everywhere else. */
-  startCarAddress?: string | null;
+  /** Operator demo ride: everything to draw, fetched beforehand (see
+   *  fetchDemoRide). The map opens already framed on `frame` (no geocoding,
+   *  no "Calculating route…", no wide view first), fades in once drawn, and
+   *  redraws at once when this changes. Unset everywhere else. */
+  prepared?: PreparedView | null;
   /** Operator demo ride: redraw the map whenever its box changes size (the
    *  ride steps give the map different heights). Off everywhere else. */
   resizeWithContainer?: boolean;
 };
 
-const ROUTE_PURPLE = "#7c5cff";
-/** "#rrggbb" → "rgba(r,g,b,a)". */
-const rgba = (hex: string, a: number) => `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+type LngLat = [number, number];
+/** The demo ride's map for one step: route lines (drawn in order, each in its
+ *  colour), end dots, the Operator's parked car, the route the car
+ *  (`tripProgress`) follows, and the points kept in view. */
+export type PreparedView = {
+  lines: { id: string; coords: LngLat[]; color: string }[];
+  dots: { at: LngLat; color: string }[];
+  parkedCar: LngLat | null;
+  carRoute: LngLat[] | null;
+  frame: LngLat[];
+};
 
 /** One Mapbox Directions step: the maneuver at its start, the road it follows,
  *  and where it starts as a fraction (0-1) of the whole route. */
@@ -69,6 +75,12 @@ const DRIVE_PITCH = 60;
 const DRIVE_INTRO_MS = 1500;
 
 const ENV_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string) || "";
+/** The smallest box holding all these points. */
+function boundsOf(mapboxgl: any, pts: [number, number][]) {
+  const b = new mapboxgl.LngLatBounds(pts[0], pts[0]);
+  for (const p of pts) b.extend(p);
+  return b;
+}
 const DEFAULT_CENTER: [number, number] = [-112.0740, 33.4484];
 
 // ── Mapbox API helpers ─────────────────────────────────────────────────────
@@ -119,6 +131,35 @@ async function mbDirections(a: [number, number], b: [number, number], token: str
 // second copy after the map was built, and fitBounds then rejected bounds
 // made from the other copy — the route never got framed.
 let mapboxglLoading: Promise<void> | null = null;
+
+function mapboxToken(): string {
+  if (ENV_TOKEN && ENV_TOKEN !== "your_pk_token_here") return ENV_TOKEN;
+  return typeof window !== "undefined" ? localStorage.getItem("MAPBOX_TOKEN") || "" : "";
+}
+
+export type DemoRideRoutes = { start: LngLat; pickup: LngLat; dropoff: LngLat; leg: LngLat[]; trip: LngLat[]; tripSteps: RouteStep[] };
+const demoRideCache = new Map<string, Promise<DemoRideRoutes | null>>();
+/** Operator demo ride: the Operator's start, the pickup and the drop-off, and
+ *  the two Directions routes between them (start → pickup, pickup → drop-off,
+ *  with turn-by-turn steps), fetched once and kept for the page's life. */
+export function fetchDemoRide(a: { start: string; pickup: string; dropoff: string }): Promise<DemoRideRoutes | null> {
+  const key = `${a.start}|${a.pickup}|${a.dropoff}`;
+  let p = demoRideCache.get(key);
+  if (!p) {
+    p = (async () => {
+      const token = mapboxToken();
+      if (!token) return null;
+      const [start, pickup, dropoff] = await Promise.all([mbGeocode(a.start, token), mbGeocode(a.pickup, token), mbGeocode(a.dropoff, token)]);
+      if (!start || !pickup || !dropoff) return null;
+      const [leg, trip] = await Promise.all([mbDirections(start, pickup, token), mbDirections(pickup, dropoff, token, true)]);
+      if (!leg || !trip) return null;
+      return { start, pickup, dropoff, leg: leg.coords, trip: trip.coords, tripSteps: trip.steps };
+    })();
+    p.then((r) => { if (!r) demoRideCache.delete(key); });
+    demoRideCache.set(key, p);
+  }
+  return p;
+}
 
 async function loadMapboxGL(token: string): Promise<any> {
   const w = window as any;
@@ -172,14 +213,20 @@ function simCarEl(): HTMLDivElement {
 }
 
 /** The demo ride's guidance view: the Operator's car from above (front up) —
- *  rounded hood, windshield, roof, rear window — in the Operator car's purple.
+ *  four wheels, rounded hood, windshield, roof, rear window — in the Operator
+ *  car's purple.
  *  Laid flat on the map, so the tilted camera sees it from behind. */
 function topDownCarEl(): HTMLDivElement {
   const el = document.createElement("div");
   el.dataset.testid = "trip-car";
+  el.dataset.kind = "top";
   el.style.cssText = "width:40px;height:72px";
   el.innerHTML = `
     <svg width="40" height="72" viewBox="0 0 30 54" xmlns="http://www.w3.org/2000/svg">
+      <g data-wheels="4" fill="#111827" stroke="#ffffff" stroke-opacity="0.25" stroke-width="0.6">
+        <rect x="0.8" y="9.5" width="4.2" height="9" rx="1.7"/><rect x="25" y="9.5" width="4.2" height="9" rx="1.7"/>
+        <rect x="0.8" y="36" width="4.2" height="9" rx="1.7"/><rect x="25" y="36" width="4.2" height="9" rx="1.7"/>
+      </g>
       <path d="M3 15 C3 5 8 1.5 15 1.5 C22 1.5 27 5 27 15 L27 46 C27 50.5 24.5 52.5 20 52.5 L10 52.5 C5.5 52.5 3 50.5 3 46 Z" fill="#7c5cff" stroke="#ffffff" stroke-width="1.5"/>
       <path d="M6 19.5 C11 16.5 19 16.5 24 19.5 L22.5 26.5 C18 25 12 25 7.5 26.5 Z" fill="#1e1b4b" fill-opacity="0.9"/>
       <rect x="7.5" y="27.5" width="15" height="14" rx="3" fill="#7c5cff" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1"/>
@@ -235,8 +282,7 @@ export function MapboxMap({
   tripProgress = null,
   onRouteSteps,
   driveView = null,
-  routeColor = ROUTE_PURPLE,
-  startCarAddress = null,
+  prepared = null,
   resizeWithContainer = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -251,10 +297,14 @@ export function MapboxMap({
   const drawnForSeedRef = useRef<number | null>(null);
   const onRouteDataRef = useRef(onRouteData);
   onRouteDataRef.current = onRouteData;
+  const preparedRef = useRef(prepared);
+  preparedRef.current = prepared;
+  const driveViewRef = useRef(driveView);
+  driveViewRef.current = driveView;
+  // Demo ride: hidden until the prepared view is drawn, then faded in.
+  const [shown, setShown] = useState(!prepared);
   const onRouteStepsRef = useRef(onRouteSteps);
   onRouteStepsRef.current = onRouteSteps;
-  const routeColorRef = useRef(routeColor);
-  routeColorRef.current = routeColor;
   // The route lookup and the map's own load race each other. The latest
   // "draw markers + route line + fit" step waits here until the map is ready
   // (its "load" handler has added the route layer), then runs exactly once —
@@ -291,11 +341,14 @@ export function MapboxMap({
         const mapboxgl = await loadMapboxGL(token);
         if (cancelled || !containerRef.current) return;
 
+        // Demo ride: open already framed on the prepared view (no wide view first).
+        const pv = preparedRef.current;
         map = new mapboxgl.Map({
           container: containerRef.current,
           style: "mapbox://styles/mapbox/dark-v11",
-          center: DEFAULT_CENTER,
-          zoom: 12,
+          ...(pv && pv.frame.length
+            ? { bounds: boundsOf(mapboxgl, pv.frame), fitBoundsOptions: { padding: fitPadding, maxZoom: 15 } }
+            : { center: DEFAULT_CENTER, zoom: 12 }),
           attributionControl: false,
           // Static route view: no drag/pan, pinch- or scroll-zoom, rotate, or
           // keyboard. Also means swipes over the map scroll the page on mobile
@@ -319,7 +372,7 @@ export function MapboxMap({
             type: "line",
             source: "route",
             layout: { "line-cap": "round", "line-join": "round" },
-            paint: { "line-color": routeColorRef.current, "line-width": 4, "line-opacity": 0.9 },
+            paint: { "line-color": "#7c5cff", "line-width": 4, "line-opacity": 0.9 },
           });
           // Demo Go-online map: no labels at all (place names, restaurants and
           // other POIs, road names, house numbers are all symbol layers).
@@ -331,6 +384,22 @@ export function MapboxMap({
           mapReadyRef.current = true;
           // A route that arrived before the map finished loading draws now.
           flushPendingApply();
+          if (preparedRef.current) {
+            // Frame at the box's real size (it may have grown since the map was made).
+            map.resize();
+            applyPrepared(map, preparedRef.current, true);
+            let done = false;
+            const show = () => {
+              if (done || cancelled) return;
+              done = true;
+              // The view the visitor first sees (for the demo test).
+              const c = map.getCenter();
+              if (containerRef.current) containerRef.current.dataset.shownView = JSON.stringify({ lng: +c.lng.toFixed(4), lat: +c.lat.toFixed(4), zoom: +map.getZoom().toFixed(2) });
+              setShown(true);
+            };
+            map.once("idle", show);
+            window.setTimeout(show, 1500);
+          }
         });
       } catch (e) {
         console.error("Mapbox init failed:", e);
@@ -357,10 +426,9 @@ export function MapboxMap({
     const run = async () => {
       setGeocoding(true);
       try {
-        const [pickup, dropoff, startCar] = await Promise.all([
+        const [pickup, dropoff] = await Promise.all([
           mbGeocode(pickupAddress, token),
           mbGeocode(dropoffAddress, token),
-          startCarAddress ? mbGeocode(startCarAddress, token) : Promise.resolve(null),
         ]);
         if (cancelled || !pickup || !dropoff) return;
         setPickupCoords(pickup);
@@ -400,20 +468,6 @@ export function MapboxMap({
               .setLngLat(dropoff)
               .addTo(map),
           );
-          // The Operator's parked car (demo offer), drawn like the trip car.
-          if (startCar) {
-            ensureSimCSS();
-            const el = document.createElement("div");
-            el.dataset.testid = "start-car";
-            el.style.cssText = "position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center";
-            el.innerHTML = `
-              <div class="mb-soft-ring" style="position:absolute;inset:0;border-radius:9999px;background:rgba(124,92,255,0.45)"></div>
-              <div style="position:relative;width:19px;height:19px;border-radius:9999px;background:#7c5cff;border:1.5px solid white;box-shadow:0 0 8px rgba(124,92,255,0.9);display:flex;align-items:center;justify-content:center;">
-                ${carSvg("#ffffff", 12)}
-              </div>
-            `;
-            markersRef.current.push(new mapboxgl.Marker({ element: el }).setLngLat(startCar).addTo(map));
-          }
 
           // Update route line
           if (route && map.getSource("route")) {
@@ -426,7 +480,6 @@ export function MapboxMap({
 
           // Fit viewport to both endpoints.
           const bounds = new mapboxgl.LngLatBounds(pickup, pickup).extend(dropoff);
-          if (startCar) bounds.extend(startCar);
           map.fitBounds(bounds, { padding: fitPadding, maxZoom: 15 });
         };
 
@@ -447,22 +500,7 @@ export function MapboxMap({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [token, pickupAddress, dropoffAddress, startCarAddress]);
-
-  // Demo ride: keep the map's drawing the size of its box.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!resizeWithContainer || !el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => mapRef.current?.resize());
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [resizeWithContainer, token]);
-
-  // The route line's colour follows `routeColor`.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (map && mapReadyRef.current && map.getLayer("route")) map.setPaintProperty("route", "line-color", routeColor);
-  }, [routeColor]);
+  }, [token, pickupAddress, dropoffAddress]);
 
   // ── 3. Animate driver marker along route (trip tracking page) ────────────
   useEffect(() => {
@@ -716,6 +754,70 @@ export function MapboxMap({
     };
   }, [simLng, simLat, simAddress, simZoom, simCars, token]);
 
+  // ── 6b. Demo ride: the prepared view (lines, dots, parked car, framing) ──
+  const preparedMarkersRef = useRef<any[]>([]);
+  const preparedLinesRef = useRef<string[]>([]);
+  function applyPrepared(map: any, pv: PreparedView, refit: boolean) {
+    const mapboxgl = (window as any).mapboxgl;
+    const ids = pv.lines.map((l) => `demo-${l.id}`);
+    for (const id of preparedLinesRef.current) {
+      if (ids.includes(id)) continue;
+      if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(id)) map.removeSource(id);
+    }
+    for (const l of pv.lines) {
+      const id = `demo-${l.id}`;
+      const data = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: l.coords } };
+      if (map.getSource(id)) (map.getSource(id) as any).setData(data);
+      else map.addSource(id, { type: "geojson", data });
+      if (!map.getLayer(id)) map.addLayer({ id, type: "line", source: id, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": l.color, "line-width": 4, "line-opacity": 0.9 } });
+      else map.setPaintProperty(id, "line-color", l.color);
+    }
+    preparedLinesRef.current = ids;
+    preparedMarkersRef.current.forEach((m) => m.remove());
+    preparedMarkersRef.current = pv.dots.map((d) => {
+      const el = document.createElement("div");
+      el.style.cssText = `width:14px;height:14px;border-radius:50%;background:${d.color};box-shadow:0 0 14px ${d.color};`;
+      return new mapboxgl.Marker({ element: el }).setLngLat(d.at).addTo(map);
+    });
+    if (pv.parkedCar) {
+      ensureSimCSS();
+      const el = document.createElement("div");
+      el.dataset.testid = "start-car";
+      el.style.cssText = "position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center";
+      el.innerHTML = `
+        <div class="mb-soft-ring" style="position:absolute;inset:0;border-radius:9999px;background:rgba(124,92,255,0.45)"></div>
+        <div style="position:relative;width:19px;height:19px;border-radius:9999px;background:#7c5cff;border:1.5px solid white;box-shadow:0 0 8px rgba(124,92,255,0.9);display:flex;align-items:center;justify-content:center;">
+          ${carSvg("#ffffff", 12)}
+        </div>`;
+      preparedMarkersRef.current.push(new mapboxgl.Marker({ element: el }).setLngLat(pv.parkedCar).addTo(map));
+    }
+    routeCoordsRef.current = pv.carRoute ?? [];
+    if (containerRef.current) containerRef.current.dataset.lines = pv.lines.map((l) => l.id).join(",");
+    if (refit && !driveViewRef.current && pv.frame.length) map.fitBounds(boundsOf(mapboxgl, pv.frame), { padding: fitPadding, maxZoom: 15, duration: 0 });
+  }
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!prepared || !map || !mapReadyRef.current) return;
+    applyPrepared(map, prepared, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prepared]);
+  // Demo ride: keep the map's drawing the size of its box (and the prepared view framed).
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!resizeWithContainer || !el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      const map = mapRef.current;
+      if (!map) return;
+      map.resize();
+      const pv = preparedRef.current;
+      if (pv && pv.frame.length && !driveViewRef.current && mapReadyRef.current) map.fitBounds(boundsOf((window as any).mapboxgl, pv.frame), { padding: fitPadding, maxZoom: 15, duration: 0 });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resizeWithContainer, token]);
+
   // ── 7. Demo ride: the Operator's car at tripProgress along the route ──────
   const tripMarkerRef = useRef<any>(null);
   const routeCumRef = useRef<{ coords: [number, number][]; cum: number[] } | null>(null);
@@ -735,6 +837,13 @@ export function MapboxMap({
     const mapboxgl = (window as any).mapboxgl;
     const coords = routeCoordsRef.current;
     if (!map || !mapboxgl || !mapReadyRef.current || coords.length < 2) return; // placed on a later tick
+    // The drive's top-down car and the round car are different markers: swap
+    // when the view changes (the demo goes straight from the pickup leg to the drive).
+    if (tripMarkerRef.current && (tripMarkerRef.current.getElement().dataset.kind === "top") !== driveOn) {
+      tripMarkerRef.current.remove();
+      tripMarkerRef.current = null;
+      driveCamRef.current = null;
+    }
     if (routeCumRef.current?.coords !== coords) {
       const cum = [0];
       for (let i = 1; i < coords.length; i++) {
@@ -791,19 +900,14 @@ export function MapboxMap({
       tripMarkerRef.current.setLngLat(at).setRotation(cam.heading);
       return;
     }
-    if (tripMarkerRef.current && tripMarkerRef.current.getElement().dataset.color !== routeColor) {
-      tripMarkerRef.current.remove();
-      tripMarkerRef.current = null;
-    }
     if (!tripMarkerRef.current) {
       ensureSimCSS();
       const el = document.createElement("div");
       el.dataset.testid = "trip-car";
-      el.dataset.color = routeColor;
       el.style.cssText = "position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center";
       el.innerHTML = `
-        <div class="mb-soft-ring" style="position:absolute;inset:0;border-radius:9999px;background:${rgba(routeColor, 0.45)}"></div>
-        <div style="position:relative;width:19px;height:19px;border-radius:9999px;background:${routeColor};border:1.5px solid white;box-shadow:0 0 8px ${rgba(routeColor, 0.9)};display:flex;align-items:center;justify-content:center;">
+        <div class="mb-soft-ring" style="position:absolute;inset:0;border-radius:9999px;background:rgba(124,92,255,0.45)"></div>
+        <div style="position:relative;width:19px;height:19px;border-radius:9999px;background:#7c5cff;border:1.5px solid white;box-shadow:0 0 8px rgba(124,92,255,0.9);display:flex;align-items:center;justify-content:center;">
           ${carSvg("#ffffff", 12)}
         </div>
       `;
@@ -811,7 +915,7 @@ export function MapboxMap({
     } else {
       tripMarkerRef.current.setLngLat(at);
     }
-  }, [tripProgress, driveOn, driveBottom, driveReduced, routeColor]);
+  }, [tripProgress, driveOn, driveBottom, driveReduced]);
   useEffect(() => () => { tripMarkerRef.current?.remove(); tripMarkerRef.current = null; }, []);
 
   // ── No-token placeholder ─────────────────────────────────────────────────
@@ -878,7 +982,11 @@ export function MapboxMap({
 
   return (
     <div className={cn("relative", className)}>
-      <div ref={containerRef} className="h-full w-full overflow-hidden rounded-2xl" />
+      <div
+        ref={containerRef}
+        className={cn("h-full w-full overflow-hidden rounded-2xl", prepared && "motion-safe:transition-opacity motion-safe:duration-[400ms]")}
+        style={prepared ? { opacity: shown ? 1 : 0 } : undefined}
+      />
       {geocoding && (
         <div className="absolute left-3 top-3 flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-xs backdrop-blur-sm">
           <Loader2 className="h-3 w-3 animate-spin text-primary" /> Calculating route…

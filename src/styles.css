@@ -230,6 +230,11 @@
   .demo-step-in { animation: none; }
 }
 
+/* Demo drive: a new turn instruction slides into the card without ever
+   leaving it blank (never starts from transparent). */
+@keyframes demo-turn-swap { from { opacity: 0.6; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.demo-turn-swap { animation: demo-turn-swap 0.25s ease-out both; }
+
 /* Demo Go-online panel: the flashing "Waiting on request" dot (steady with reduced motion). */
 @keyframes waiting-dot {
   0%, 100% { opacity: 1; }

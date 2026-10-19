@@ -2,9 +2,9 @@
 // the Contracted Services Agreement, the drive and the closing line. Built
 // from the website simulation's pieces (route map, booking-card fields, trip
 // rows, Contracted Services card). Nothing here is real or saved.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, ArrowUp, ArrowUpLeft, ArrowUpRight, Clock, CornerUpLeft, CornerUpRight, Flag, Navigation, Undo2, User, X } from "lucide-react";
-import { MapboxMap, type RouteStep } from "@/components/MapboxMap";
+import { MapboxMap, fetchDemoRide, type DemoRideRoutes, type PreparedView, type RouteStep } from "@/components/MapboxMap";
 import { ContractedServicesCard, Pill, Row, csaAgreementText, formatTime } from "@/components/SmartRateBooking";
 import { BrandText } from "@/components/BrandText";
 import { DEMO_RIDE, DRIVE_VIEW } from "@/lib/demo";
@@ -12,22 +12,23 @@ import { cn } from "@/lib/utils";
 
 export type RidePhase = "request" | "offer" | "pickup" | "csa" | "drive" | "complete" | "thanks";
 
-/** The car and its route on the way to the pickup (the Customer screens' green). */
+/** The route line on the way to the pickup (the Customer screens' green); the trip's is purple. */
 const PICKUP_GREEN = "#00c57c";
+const TRIP_PURPLE = "#7c5cff";
 
-/** Two short, soft beeps with a short gap, made with Web Audio (no audio file). Silent if audio isn't available or is blocked. */
+/** Two short beeps with a short gap, made with Web Audio (no audio file). Silent if audio isn't available or is blocked. */
 export function playChime() {
   try {
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
     const now = ctx.currentTime;
-    // Two soft beeps (0.18 s each) with a short gap.
+    // Two clear beeps (0.18 s each) with a short gap; peak gain 0.4 keeps the sine well below clipping.
     for (const at of [0, 0.32]) {
       const gain = ctx.createGain();
       gain.connect(ctx.destination);
       gain.gain.setValueAtTime(0.0001, now + at);
-      gain.gain.exponentialRampToValueAtTime(0.07, now + at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.4, now + at + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.18);
       const osc = ctx.createOscillator();
       osc.type = "sine";
@@ -84,7 +85,16 @@ export function DemoRideScreen({
   // sits just above the bottom card, which is measured for that.
   const guidance = DRIVE_VIEW === "guidance";
   const inGuidance = guidance && phase === "drive";
-  const [steps, setSteps] = useState<RouteStep[]>([]);
+  // The ride's routes (start → pickup, pickup → drop-off, with the trip's
+  // turn-by-turn steps), fetched once when the request comes in, so every map
+  // opens already drawn and framed.
+  const [routes, setRoutes] = useState<DemoRideRoutes | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetchDemoRide({ start: r.operatorStart, pickup: r.pickup, dropoff: r.dropoff }).then((d) => { if (live) setRoutes(d); });
+    return () => { live = false; };
+  }, [r.operatorStart, r.pickup, r.dropoff]);
+  const steps: RouteStep[] = routes?.tripSteps ?? [];
   const bottomRef = useRef<HTMLDivElement>(null);
   const [bottomPx, setBottomPx] = useState(220);
   useLayoutEffect(() => {
@@ -145,14 +155,19 @@ export function DemoRideScreen({
     return () => cancelAnimationFrame(raf);
   }, [pickupLeg, reduced, lead, r.pickupLegMs]);
   const arrived = pickupLeg && legP >= 1;
-  // Which route the map has drawn ("leg" = start → pickup, "trip" = pickup →
-  // drop-off): the car is only placed once its route is in.
-  const routeKey = pickupLeg ? "leg" : "trip";
-  const routeKeyRef = useRef(routeKey);
-  routeKeyRef.current = routeKey;
-  const [routeIn, setRouteIn] = useState<string | null>(null);
-  const onSteps = (s: RouteStep[]) => { setSteps(s); setRouteIn(routeKeyRef.current); };
-  useEffect(() => { setSteps([]); setRouteIn(null); }, [routeKey]);
+  // What the map draws on each step: the offer, the green leg to the pickup and
+  // the purple trip with the Operator's car parked at the start; on the way to
+  // pickup, only the green leg (the car drives it); the agreement and the
+  // drive, only the trip. The car is purple throughout.
+  const mapView = useMemo<PreparedView | null>(() => {
+    if (!routes) return null;
+    const leg = { id: "leg", coords: routes.leg, color: PICKUP_GREEN };
+    const trip = { id: "trip", coords: routes.trip, color: TRIP_PURPLE };
+    const pickupDot = { at: routes.pickup, color: TRIP_PURPLE }, dropoffDot = { at: routes.dropoff, color: "#22d3ee" };
+    if (offer) return { lines: [leg, trip], dots: [pickupDot, dropoffDot], parkedCar: routes.start, carRoute: null, frame: [...routes.leg, ...routes.trip] };
+    if (pickupLeg) return { lines: [leg], dots: [pickupDot], parkedCar: null, carRoute: routes.leg, frame: routes.leg };
+    return { lines: [trip], dots: [pickupDot, dropoffDot], parkedCar: null, carRoute: routes.trip, frame: routes.trip };
+  }, [routes, offer, pickupLeg]);
   const [headerPx, setHeaderPx] = useState(64);
   useLayoutEffect(() => {
     const measure = () => setHeaderPx(document.querySelector("header")?.getBoundingClientRect().height ?? 64);
@@ -171,6 +186,7 @@ export function DemoRideScreen({
   }, [offer, r.autoAcceptMs, lead]);
   const secondsLeft = Math.ceil((r.autoAcceptMs - offerMs) / 1000);
   const fill = (reduced ? Math.floor(offerMs / 1000) * 1000 : offerMs) / r.autoAcceptMs;
+  const mapClass = inGuidance ? "h-full w-full [&>div]:rounded-none" : fullScreen ? "min-h-[96px] w-full flex-1" : "h-[40svh] min-h-[200px] w-full";
   // Side gutters: 16px on phones, the content centred at max-w-3xl on wide screens.
   const gutter = "max(16px, calc((100vw - 48rem) / 2 + 16px))";
 
@@ -262,21 +278,20 @@ export function DemoRideScreen({
           </button>
         </>
       )}
-      {/* The same map through every step. The offer and the agreement show the
-          trip (the offer with the Operator's car parked at its start); on the way
-          to pickup the map draws start → pickup in green; the drive, pickup →
-          drop-off again. */}
-      <MapboxMap
-        className={inGuidance ? "h-full w-full [&>div]:rounded-none" : fullScreen ? "min-h-[96px] w-full flex-1" : "h-[40svh] min-h-[200px] w-full"}
-        pickupAddress={pickupLeg ? r.operatorStart : r.pickup}
-        dropoffAddress={pickupLeg ? r.pickup : r.dropoff}
-        startCarAddress={offer ? r.operatorStart : null}
-        routeColor={pickupLeg ? PICKUP_GREEN : undefined}
-        tripProgress={phase === "drive" ? (routeIn === "trip" ? progress : null) : pickupLeg ? (routeIn === "leg" ? legP : null) : null}
-        onRouteSteps={onSteps}
-        resizeWithContainer
-        driveView={inGuidance ? { bottomPx, reduced } : null}
-      />
+      {/* The same map through every step (see mapView); until the routes are
+          in, an empty box of the same size. */}
+      {mapView ? (
+        <MapboxMap
+          className={mapClass}
+          prepared={mapView}
+          fitPadding={36}
+          tripProgress={phase === "drive" ? progress : pickupLeg ? legP : null}
+          resizeWithContainer
+          driveView={inGuidance ? { bottomPx, reduced } : null}
+        />
+      ) : (
+        <div data-testid="demo-map-wait" className={cn(mapClass, "rounded-2xl border border-border bg-surface")} />
+      )}
 
       {phase === "offer" ? (
         <div data-testid="demo-offer" className="flex shrink-0 flex-col gap-2">
@@ -369,7 +384,7 @@ export function DemoRideScreen({
         <>
           {/* Top: the next turn — arrow, street, distance to it. */}
           <div data-testid="guide-turn" className="absolute inset-x-3 rounded-3xl border border-primary/30 bg-[#15122a]/95 p-4 shadow-elevated backdrop-blur" style={{ top: "max(12px, env(safe-area-inset-top))" }}>
-            <div key={nextIdx} className={cn("flex items-center gap-4", !reduced && "animate-in fade-in duration-300")}>
+            <div key={nextIdx} className={cn("flex items-center gap-4", !reduced && "demo-turn-swap")}>
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-primary text-primary-foreground">
                 <TurnIcon className="h-10 w-10" strokeWidth={2.5} />
               </div>
