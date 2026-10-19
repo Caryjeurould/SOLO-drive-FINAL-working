@@ -97,6 +97,17 @@ async function mbGeocode(query: string, token: string): Promise<[number, number]
   }
 }
 
+/** The demo Go-online map's centre for an address (looked up once, then kept). */
+const simCenterCache = new Map<string, Promise<[number, number]>>();
+function simAreaCenter(address: string, token: string): Promise<[number, number]> {
+  let p = simCenterCache.get(address);
+  if (!p) {
+    p = mbGeocode(address, token).then((c) => { if (!c) simCenterCache.delete(address); return c ?? DEFAULT_CENTER; });
+    simCenterCache.set(address, p);
+  }
+  return p;
+}
+
 async function mbDirections(a: [number, number], b: [number, number], token: string, withSteps = false) {
   try {
     const r = await fetch(
@@ -301,8 +312,8 @@ export function MapboxMap({
   preparedRef.current = prepared;
   const driveViewRef = useRef(driveView);
   driveViewRef.current = driveView;
-  // Demo ride: hidden until the prepared view is drawn, then faded in.
-  const [shown, setShown] = useState(!prepared);
+  // Demo ride and demo Go-online map: hidden until drawn, then faded in.
+  const [shown, setShown] = useState(!prepared && !simulationArea);
   const onRouteStepsRef = useRef(onRouteSteps);
   onRouteStepsRef.current = onRouteSteps;
   // The route lookup and the map's own load race each other. The latest
@@ -343,12 +354,19 @@ export function MapboxMap({
 
         // Demo ride: open already framed on the prepared view (no wide view first).
         const pv = preparedRef.current;
+        // Demo Go-online map: open at its final centre and zoom (the area's
+        // centre, or its address looked up first), so it never moves.
+        const sim = simulationRef.current;
+        const simCenter = sim ? sim.center ?? (await simAreaCenter(sim.address, token)) : null;
+        if (cancelled || !containerRef.current) return;
         map = new mapboxgl.Map({
           container: containerRef.current,
           style: "mapbox://styles/mapbox/dark-v11",
           ...(pv && pv.frame.length
             ? { bounds: boundsOf(mapboxgl, pv.frame), fitBoundsOptions: { padding: fitPadding, maxZoom: 15 } }
-            : { center: DEFAULT_CENTER, zoom: 12 }),
+            : sim && simCenter
+              ? { center: simCenter, zoom: sim.zoom }
+              : { center: DEFAULT_CENTER, zoom: 12 }),
           attributionControl: false,
           // Static route view: no drag/pan, pinch- or scroll-zoom, rotate, or
           // keyboard. Also means swipes over the map scroll the page on mobile
@@ -356,6 +374,15 @@ export function MapboxMap({
           interactive: false,
         });
         mapRef.current = map;
+        if (sim) {
+          // Demo Go-online map: shown anyway if its tiles never finish loading.
+          window.setTimeout(() => { if (!cancelled) setShown(true); }, 6000);
+          // For the demo test: the view it opened at and how often it moved.
+          const el = containerRef.current;
+          el.dataset.simView = JSON.stringify({ lng: +map.getCenter().lng.toFixed(5), lat: +map.getCenter().lat.toFixed(5), zoom: map.getZoom() });
+          el.dataset.simMoves = "0";
+          map.on("move", () => { el.dataset.simMoves = String(+(el.dataset.simMoves ?? 0) + 1); });
+        }
 
         map.on("load", () => {
           if (cancelled) return;
@@ -643,10 +670,13 @@ export function MapboxMap({
       const mapboxgl = (window as any).mapboxgl;
       if (cancelled || !map || !mapboxgl) return;
       const center: [number, number] =
-        simLng != null && simLat != null ? [simLng, simLat] : (await mbGeocode(simAddress, token)) ?? DEFAULT_CENTER;
+        simLng != null && simLat != null ? [simLng, simLat] : await simAreaCenter(simAddress, token);
       if (cancelled) return;
-      map.jumpTo({ center, zoom: simZoom });
-      await new Promise<void>((r) => map.once("idle", () => r()));
+      // The map was made at this view; only a later change of area moves it.
+      const c0 = map.getCenter();
+      if (Math.abs(c0.lng - center[0]) > 1e-6 || Math.abs(c0.lat - center[1]) > 1e-6 || map.getZoom() !== simZoom) map.jumpTo({ center, zoom: simZoom });
+      // Every tile of the final view in (the map may already be idle).
+      await new Promise<void>((r) => { if (map.loaded() && map.areTilesLoaded()) r(); else map.once("idle", () => r()); });
       if (cancelled) return;
 
       // The visitor's own car: a little larger than the others, with a softly pulsing ring.
@@ -727,6 +757,9 @@ export function MapboxMap({
         cars.push({ m, l, d, dir: Math.random() < 0.5 ? 1 : -1, v: mph(0.6 * (15 + Math.random() * 15)), w: 0.2 + Math.random() * 0.3, ph: Math.random() * 6.28 });
       }
       markers.push(new mapboxgl.Marker({ element: self }).setLngLat(center).addTo(map)); // added last, drawn on top
+      // The finished map and its cars fade in together.
+      map.getContainer().dataset.simReady = "1";
+      setShown(true);
 
       if (still || !cars.length) return; // reduced motion: cars stay still
       let last = performance.now();
@@ -984,8 +1017,8 @@ export function MapboxMap({
     <div className={cn("relative", className)}>
       <div
         ref={containerRef}
-        className={cn("h-full w-full overflow-hidden rounded-2xl", prepared && "motion-safe:transition-opacity motion-safe:duration-[400ms]")}
-        style={prepared ? { opacity: shown ? 1 : 0 } : undefined}
+        className={cn("h-full w-full overflow-hidden rounded-2xl", prepared && "motion-safe:transition-opacity motion-safe:duration-[400ms]", simulationArea && !prepared && "motion-safe:transition-opacity motion-safe:duration-300")}
+        style={prepared || simulationArea ? { opacity: shown ? 1 : 0 } : undefined}
       />
       {geocoding && (
         <div className="absolute left-3 top-3 flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-xs backdrop-blur-sm">
