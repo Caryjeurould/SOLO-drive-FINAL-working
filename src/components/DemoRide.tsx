@@ -10,7 +10,10 @@ import { BrandText } from "@/components/BrandText";
 import { DEMO_RIDE, DRIVE_VIEW } from "@/lib/demo";
 import { cn } from "@/lib/utils";
 
-export type RidePhase = "request" | "offer" | "csa" | "drive" | "complete" | "thanks";
+export type RidePhase = "request" | "offer" | "pickup" | "csa" | "drive" | "complete" | "thanks";
+
+/** The car and its route on the way to the pickup (the Customer screens' green). */
+const PICKUP_GREEN = "#00c57c";
 
 /** Two short, soft beeps with a short gap, made with Web Audio (no audio file). Silent if audio isn't available or is blocked. */
 export function playChime() {
@@ -122,6 +125,34 @@ export function DemoRideScreen({
   // the auto-accept time (DEMO_RIDE.autoAcceptMs, run by the dashboard) as a
   // fill with the seconds shown; with reduced motion the fill moves per second.
   const offer = phase === "offer";
+  // On the way to pickup: the car drives the Directions route from the
+  // Operator's start to the pickup over DEMO_RIDE.pickupLegMs (after the fade-in
+  // and hold), then "Arrived at pickup"; quarter steps with reduced motion.
+  const pickupLeg = phase === "pickup";
+  const fullScreen = offer || pickupLeg;
+  const [legP, setLegP] = useState(0);
+  useEffect(() => {
+    if (!pickupLeg) return;
+    const start = performance.now() + lead;
+    let raf = 0;
+    const tick = () => {
+      const p = Math.max(0, Math.min(1, (performance.now() - start) / r.pickupLegMs));
+      setLegP(reduced && p < 1 ? Math.floor(p * 4) / 4 : p);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    setLegP(0);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [pickupLeg, reduced, lead, r.pickupLegMs]);
+  const arrived = pickupLeg && legP >= 1;
+  // Which route the map has drawn ("leg" = start → pickup, "trip" = pickup →
+  // drop-off): the car is only placed once its route is in.
+  const routeKey = pickupLeg ? "leg" : "trip";
+  const routeKeyRef = useRef(routeKey);
+  routeKeyRef.current = routeKey;
+  const [routeIn, setRouteIn] = useState<string | null>(null);
+  const onSteps = (s: RouteStep[]) => { setSteps(s); setRouteIn(routeKeyRef.current); };
+  useEffect(() => { setSteps([]); setRouteIn(null); }, [routeKey]);
   const [headerPx, setHeaderPx] = useState(64);
   useLayoutEffect(() => {
     const measure = () => setHeaderPx(document.querySelector("header")?.getBoundingClientRect().height ?? 64);
@@ -206,12 +237,12 @@ export function DemoRideScreen({
       className={inGuidance
         // The Mapbox logo moves up to just above the bottom card.
         ? "fixed inset-x-0 top-0 z-[60] h-[100svh] overflow-hidden bg-background [&_.mapboxgl-ctrl-bottom-left]:!bottom-[var(--guide-logo)]"
-        : offer
+        : fullScreen
           ? "fixed inset-x-0 bottom-0 z-20 flex flex-col gap-2 overflow-hidden bg-background pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
           : "mx-auto max-w-3xl px-4 py-4 md:px-8"}
       style={inGuidance
         ? ({ "--guide-logo": `${bottomPx - 60}px` } as React.CSSProperties)
-        : offer ? { top: headerPx, paddingLeft: gutter, paddingRight: gutter } : undefined}
+        : fullScreen ? { top: headerPx, paddingLeft: gutter, paddingRight: gutter } : undefined}
     >
       {curtain}
       {offer && (
@@ -231,14 +262,19 @@ export function DemoRideScreen({
           </button>
         </>
       )}
-      {/* The same map through every step, so the route stays drawn. */}
+      {/* The same map through every step. The offer and the agreement show the
+          trip (the offer with the Operator's car parked at its start); on the way
+          to pickup the map draws start → pickup in green; the drive, pickup →
+          drop-off again. */}
       <MapboxMap
-        className={inGuidance ? "h-full w-full [&>div]:rounded-none" : offer ? "min-h-[96px] w-full flex-1" : "h-[40svh] min-h-[200px] w-full"}
-        pickupAddress={r.pickup}
-        dropoffAddress={r.dropoff}
-        tripProgress={phase === "drive" ? progress : offer && steps.length ? 0 : null}
-        // The offer shows the car once the route is in (steps arrive with it).
-        onRouteSteps={guidance || offer ? setSteps : undefined}
+        className={inGuidance ? "h-full w-full [&>div]:rounded-none" : fullScreen ? "min-h-[96px] w-full flex-1" : "h-[40svh] min-h-[200px] w-full"}
+        pickupAddress={pickupLeg ? r.operatorStart : r.pickup}
+        dropoffAddress={pickupLeg ? r.pickup : r.dropoff}
+        startCarAddress={offer ? r.operatorStart : null}
+        routeColor={pickupLeg ? PICKUP_GREEN : undefined}
+        tripProgress={phase === "drive" ? (routeIn === "trip" ? progress : null) : pickupLeg ? (routeIn === "leg" ? legP : null) : null}
+        onRouteSteps={onSteps}
+        resizeWithContainer
         driveView={inGuidance ? { bottomPx, reduced } : null}
       />
 
@@ -303,6 +339,31 @@ export function DemoRideScreen({
             <ArrowRight className="relative h-4 w-4" />
             <span data-testid="demo-offer-countdown" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/25 px-2 py-0.5 text-xs tabular-nums">{secondsLeft}s</span>
           </button>
+        </div>
+      ) : pickupLeg ? (
+        <div data-testid="demo-pickup" className="flex shrink-0 flex-col gap-2">
+          <div className="flex items-center justify-between gap-2 px-1">
+            <div data-testid="demo-pickup-title" className="font-display text-xl font-semibold">{arrived ? "Arrived at pickup" : "On the way to pickup"}</div>
+            <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-success">{arrived ? "Arrived" : "En route"}</span>
+          </div>
+          <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-1.5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-primary font-display text-sm font-semibold text-primary-foreground">
+              {r.customer.charAt(0)}
+            </div>
+            <span data-testid="demo-pickup-customer" className="text-sm font-medium">{r.customer}</span>
+            <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] text-success">Verified ✓</span>
+          </div>
+          <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-[13px]">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-primary-glow" />
+            <span className="w-[52px] shrink-0 text-[10px] uppercase tracking-widest text-muted-foreground">Pickup</span>
+            <span data-testid="demo-pickup-address" className="truncate">{r.pickup}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-success/30 bg-success/5 px-3 py-2.5">
+            <span className="text-[10px] uppercase tracking-widest text-success">To pickup</span>
+            <span data-testid="demo-pickup-countdown" className="font-display text-2xl font-semibold tabular-nums">
+              {(r.pickupMi * (1 - legP)).toFixed(1)} mi · {Math.max(0, Math.ceil(r.operatorEtaMin * (1 - legP) - 1e-9))} min
+            </span>
+          </div>
         </div>
       ) : inGuidance ? (
         <>

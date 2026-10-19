@@ -227,8 +227,8 @@ function OperatorDashboard() {
     return () => window.removeEventListener("resize", fit);
   }, [showMap]);
   // Demo only: the simulated ride. About 5 s after the online map opens a
-  // ride is offered (two soft beeps); Accept (or 6 s without a tap) makes the
-  // Contracted Services Agreement; then the drive, the closing line, and the
+  // ride is offered (two soft beeps); Accept (or the countdown) makes the
+  // Contracted Services Agreement; then the drive to the pickup; then the drive, the closing line, and the
   // whole demo starts over at the name screen. Stop, or leaving the page,
   // cancels whatever is pending (every timer below is cleared on cleanup).
   const navigate = useNavigate();
@@ -259,7 +259,9 @@ function OperatorDashboard() {
       case "offer":
         return after(lead + DEMO_RIDE.autoAcceptMs, acceptRide);
       case "csa":
-        return after(lead + DEMO_RIDE.csaMs, () => { setRideProgress(0); setRide((r) => ({ ...r, phase: "drive" })); });
+        return after(lead + DEMO_RIDE.csaMs, () => setRide((r) => ({ ...r, phase: "pickup" })));
+      case "pickup":
+        return after(lead + DEMO_RIDE.pickupLegMs + DEMO_RIDE.arrivedMs, () => { setRideProgress(0); setRide((r) => ({ ...r, phase: "drive" })); });
       case "drive": {
         // The car and the countdown follow the clock (from the end of the step's
         // fade-in and hold); with reduced motion they jump in quarter steps.

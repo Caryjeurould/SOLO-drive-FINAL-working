@@ -130,6 +130,12 @@ export const DEMO_RIDE = {
   requestMs: 2600,
   /** The offer's countdown: Accept, or auto-accept at zero. */
   autoAcceptMs: 10000,
+  /** Where the Operator starts: about 4.6 driving miles from the pickup
+   *  (Mapbox Directions: 4.67 mi). */
+  operatorStart: "4300 N 16th St, Phoenix, AZ",
+  /** On the way to pickup (sped up, like the trip), then "Arrived at pickup". */
+  pickupLegMs: 8000,
+  arrivedMs: 3500,
   /** The Contracted Services card grows and settles back (6.2 s), then the drive starts. */
   csaMs: 8600,
   /** The drive in the "classic" view (map + Distance / Trip ETA / Arrival rows). */

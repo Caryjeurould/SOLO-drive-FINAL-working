@@ -42,7 +42,21 @@ type Props = {
    *  with the car `bottomPx` above the map's bottom edge, drawn as a top-down
    *  car. `reduced`: no tilt/glide, instant turns. Unset everywhere else. */
   driveView?: { bottomPx: number; reduced: boolean } | null;
+  /** Operator demo ride: the colour of the route line and of the car drawn by
+   *  `tripProgress` (e.g. green on the way to the pickup). Defaults to the
+   *  usual purple, so other maps are unchanged. */
+  routeColor?: string;
+  /** Operator demo ride offer: draw the Operator's car parked at this address
+   *  (and keep it in view). Unset everywhere else. */
+  startCarAddress?: string | null;
+  /** Operator demo ride: redraw the map whenever its box changes size (the
+   *  ride steps give the map different heights). Off everywhere else. */
+  resizeWithContainer?: boolean;
 };
+
+const ROUTE_PURPLE = "#7c5cff";
+/** "#rrggbb" → "rgba(r,g,b,a)". */
+const rgba = (hex: string, a: number) => `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 
 /** One Mapbox Directions step: the maneuver at its start, the road it follows,
  *  and where it starts as a fraction (0-1) of the whole route. */
@@ -221,6 +235,9 @@ export function MapboxMap({
   tripProgress = null,
   onRouteSteps,
   driveView = null,
+  routeColor = ROUTE_PURPLE,
+  startCarAddress = null,
+  resizeWithContainer = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -236,6 +253,8 @@ export function MapboxMap({
   onRouteDataRef.current = onRouteData;
   const onRouteStepsRef = useRef(onRouteSteps);
   onRouteStepsRef.current = onRouteSteps;
+  const routeColorRef = useRef(routeColor);
+  routeColorRef.current = routeColor;
   // The route lookup and the map's own load race each other. The latest
   // "draw markers + route line + fit" step waits here until the map is ready
   // (its "load" handler has added the route layer), then runs exactly once —
@@ -300,7 +319,7 @@ export function MapboxMap({
             type: "line",
             source: "route",
             layout: { "line-cap": "round", "line-join": "round" },
-            paint: { "line-color": "#7c5cff", "line-width": 4, "line-opacity": 0.9 },
+            paint: { "line-color": routeColorRef.current, "line-width": 4, "line-opacity": 0.9 },
           });
           // Demo Go-online map: no labels at all (place names, restaurants and
           // other POIs, road names, house numbers are all symbol layers).
@@ -338,9 +357,10 @@ export function MapboxMap({
     const run = async () => {
       setGeocoding(true);
       try {
-        const [pickup, dropoff] = await Promise.all([
+        const [pickup, dropoff, startCar] = await Promise.all([
           mbGeocode(pickupAddress, token),
           mbGeocode(dropoffAddress, token),
+          startCarAddress ? mbGeocode(startCarAddress, token) : Promise.resolve(null),
         ]);
         if (cancelled || !pickup || !dropoff) return;
         setPickupCoords(pickup);
@@ -380,6 +400,20 @@ export function MapboxMap({
               .setLngLat(dropoff)
               .addTo(map),
           );
+          // The Operator's parked car (demo offer), drawn like the trip car.
+          if (startCar) {
+            ensureSimCSS();
+            const el = document.createElement("div");
+            el.dataset.testid = "start-car";
+            el.style.cssText = "position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center";
+            el.innerHTML = `
+              <div class="mb-soft-ring" style="position:absolute;inset:0;border-radius:9999px;background:rgba(124,92,255,0.45)"></div>
+              <div style="position:relative;width:19px;height:19px;border-radius:9999px;background:#7c5cff;border:1.5px solid white;box-shadow:0 0 8px rgba(124,92,255,0.9);display:flex;align-items:center;justify-content:center;">
+                ${carSvg("#ffffff", 12)}
+              </div>
+            `;
+            markersRef.current.push(new mapboxgl.Marker({ element: el }).setLngLat(startCar).addTo(map));
+          }
 
           // Update route line
           if (route && map.getSource("route")) {
@@ -392,6 +426,7 @@ export function MapboxMap({
 
           // Fit viewport to both endpoints.
           const bounds = new mapboxgl.LngLatBounds(pickup, pickup).extend(dropoff);
+          if (startCar) bounds.extend(startCar);
           map.fitBounds(bounds, { padding: fitPadding, maxZoom: 15 });
         };
 
@@ -412,7 +447,22 @@ export function MapboxMap({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [token, pickupAddress, dropoffAddress]);
+  }, [token, pickupAddress, dropoffAddress, startCarAddress]);
+
+  // Demo ride: keep the map's drawing the size of its box.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!resizeWithContainer || !el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => mapRef.current?.resize());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [resizeWithContainer, token]);
+
+  // The route line's colour follows `routeColor`.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && mapReadyRef.current && map.getLayer("route")) map.setPaintProperty("route", "line-color", routeColor);
+  }, [routeColor]);
 
   // ── 3. Animate driver marker along route (trip tracking page) ────────────
   useEffect(() => {
@@ -741,14 +791,19 @@ export function MapboxMap({
       tripMarkerRef.current.setLngLat(at).setRotation(cam.heading);
       return;
     }
+    if (tripMarkerRef.current && tripMarkerRef.current.getElement().dataset.color !== routeColor) {
+      tripMarkerRef.current.remove();
+      tripMarkerRef.current = null;
+    }
     if (!tripMarkerRef.current) {
       ensureSimCSS();
       const el = document.createElement("div");
       el.dataset.testid = "trip-car";
+      el.dataset.color = routeColor;
       el.style.cssText = "position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center";
       el.innerHTML = `
-        <div class="mb-soft-ring" style="position:absolute;inset:0;border-radius:9999px;background:rgba(124,92,255,0.45)"></div>
-        <div style="position:relative;width:19px;height:19px;border-radius:9999px;background:#7c5cff;border:1.5px solid white;box-shadow:0 0 8px rgba(124,92,255,0.9);display:flex;align-items:center;justify-content:center;">
+        <div class="mb-soft-ring" style="position:absolute;inset:0;border-radius:9999px;background:${rgba(routeColor, 0.45)}"></div>
+        <div style="position:relative;width:19px;height:19px;border-radius:9999px;background:${routeColor};border:1.5px solid white;box-shadow:0 0 8px ${rgba(routeColor, 0.9)};display:flex;align-items:center;justify-content:center;">
           ${carSvg("#ffffff", 12)}
         </div>
       `;
@@ -756,7 +811,7 @@ export function MapboxMap({
     } else {
       tripMarkerRef.current.setLngLat(at);
     }
-  }, [tripProgress, driveOn, driveBottom, driveReduced]);
+  }, [tripProgress, driveOn, driveBottom, driveReduced, routeColor]);
   useEffect(() => () => { tripMarkerRef.current?.remove(); tripMarkerRef.current = null; }, []);
 
   // ── No-token placeholder ─────────────────────────────────────────────────
