@@ -261,7 +261,7 @@ function OperatorDashboard() {
       case "csa":
         return after(lead + DEMO_RIDE.csaMs, () => setRide((r) => ({ ...r, phase: "pickup" })));
       case "pickup":
-        return after(lead + DEMO_RIDE.pickupLegMs + DEMO_RIDE.arrivedMs, () => { setRideProgress(0); setRide((r) => ({ ...r, phase: "drive" })); });
+        return after(lead + DEMO_RIDE.pickupOverviewMs + DEMO_RIDE.pickupLegMs + DEMO_RIDE.arrivedMs, () => { setRideProgress(0); setRide((r) => ({ ...r, phase: "drive" })); });
       case "drive": {
         // The car and the countdown follow the clock (from the end of the step's
         // fade-in and hold); with reduced motion they jump in quarter steps.

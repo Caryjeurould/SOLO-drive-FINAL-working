@@ -84,7 +84,33 @@ export function DemoRideScreen({
   // steps come from the same Mapbox Directions route the map draws; the car
   // sits just above the bottom card, which is measured for that.
   const guidance = DRIVE_VIEW === "guidance";
-  const inGuidance = guidance && phase === "drive";
+  // On the way to pickup: the overview of the green route (DEMO_RIDE.pickupOverviewMs,
+  // after the fade-in and hold), then the same navigation view as the drive while the
+  // car drives the leg over DEMO_RIDE.pickupLegMs, then "Arrived at pickup"; quarter
+  // steps with reduced motion.
+  const pickupLeg = phase === "pickup";
+  const lead = r.phaseFadeMs + r.phaseHoldMs;
+  const [legP, setLegP] = useState(0);
+  const [legNav, setLegNav] = useState(false);
+  useEffect(() => {
+    setLegP(0);
+    setLegNav(false);
+    if (!pickupLeg) return;
+    const start = performance.now() + lead + r.pickupOverviewMs;
+    let raf = 0;
+    const tick = () => {
+      const now = performance.now();
+      if (guidance && now >= start) setLegNav(true);
+      const p = Math.max(0, Math.min(1, (now - start) / r.pickupLegMs));
+      setLegP(reduced && p < 1 ? Math.floor(p * 4) / 4 : p);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [pickupLeg, guidance, reduced, lead, r.pickupOverviewMs, r.pickupLegMs]);
+  const arrived = pickupLeg && legP >= 1;
+  const navLeg = pickupLeg && legNav;
+  const inGuidance = guidance && (phase === "drive" || navLeg);
   // The ride's routes (start → pickup, pickup → drop-off, with the trip's
   // turn-by-turn steps), fetched once when the request comes in, so every map
   // opens already drawn and framed.
@@ -94,7 +120,14 @@ export function DemoRideScreen({
     fetchDemoRide({ start: r.operatorStart, pickup: r.pickup, dropoff: r.dropoff }).then((d) => { if (live) setRoutes(d); });
     return () => { live = false; };
   }, [r.operatorStart, r.pickup, r.dropoff]);
-  const steps: RouteStep[] = routes?.tripSteps ?? [];
+  // The navigation view follows the leg (to the pickup) or the trip (to the drop-off).
+  const steps: RouteStep[] = (navLeg ? routes?.legSteps : routes?.tripSteps) ?? [];
+  const navP = navLeg ? legP : progress;
+  const navMi = navLeg ? r.pickupMi : r.tripMi;
+  const navLeft = navLeg ? 1 - legP : left;
+  const navMiles = `${(navMi * navLeft).toFixed(1)} mi`;
+  const navMinutes = `${Math.max(0, Math.ceil((navLeg ? r.operatorEtaMin : r.tripMin) * navLeft - 1e-9))} min`;
+  const navArrival = navLeg ? (acceptedAt != null ? formatTime(acceptedAt + r.operatorEtaMin * 60_000).toLowerCase() : "—") : arrival;
   const bottomRef = useRef<HTMLDivElement>(null);
   const [bottomPx, setBottomPx] = useState(220);
   useLayoutEffect(() => {
@@ -104,22 +137,21 @@ export function DemoRideScreen({
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, [inGuidance]);
-  const dropoffStreet = r.dropoff.split(",")[0];
-  // The next maneuver ahead of the car; distances scaled to the trip's miles so they agree with the bottom card.
-  const nextIdx = steps.length ? (() => { const i = steps.findIndex((s, k) => k > 0 && s.startFrac > progress + 1e-9); return i < 0 ? steps.length - 1 : i; })() : -1;
+  const endStreet = (navLeg ? r.pickup : r.dropoff).split(",")[0];
+  // The next maneuver ahead of the car; distances scaled to the route's miles so they agree with the bottom card.
+  const nextIdx = steps.length ? (() => { const i = steps.findIndex((s, k) => k > 0 && s.startFrac > navP + 1e-9); return i < 0 ? steps.length - 1 : i; })() : -1;
   const next = nextIdx >= 0 ? steps[nextIdx] : null;
   const TurnIcon = next ? turnIcon(next) : Navigation;
-  const turnStreet = !next || next.type === "arrive" ? dropoffStreet
-    : next.name || steps.slice(nextIdx + 1).find((s) => s.name)?.name || dropoffStreet; // no name: the next road
+  const turnStreet = !next || next.type === "arrive" ? endStreet
+    : next.name || steps.slice(nextIdx + 1).find((s) => s.name)?.name || endStreet; // no name: the next road
   const turnRef = next && next.type !== "arrive" && next.name ? next.ref.split(";")[0] : "";
-  const turnMi = next ? Math.max(0, next.startFrac - progress) * r.tripMi : r.tripMi * left;
+  const turnMi = next ? Math.max(0, next.startFrac - navP) * navMi : navMi * navLeft;
 
   // The Contracted Services card grows big, then settles back (the website's
   // magnify; with reduced motion only its glow).
   const csaRef = useRef<HTMLDivElement>(null);
   const [magnify, setMagnify] = useState(false);
   // Each step fades in, then holds before anything on it starts (DEMO_RIDE.phaseFadeMs + phaseHoldMs).
-  const lead = r.phaseFadeMs + r.phaseHoldMs;
   useEffect(() => {
     if (phase !== "csa") return;
     const t = window.setTimeout(() => {
@@ -135,26 +167,7 @@ export function DemoRideScreen({
   // the auto-accept time (DEMO_RIDE.autoAcceptMs, run by the dashboard) as a
   // fill with the seconds shown; with reduced motion the fill moves per second.
   const offer = phase === "offer";
-  // On the way to pickup: the car drives the Directions route from the
-  // Operator's start to the pickup over DEMO_RIDE.pickupLegMs (after the fade-in
-  // and hold), then "Arrived at pickup"; quarter steps with reduced motion.
-  const pickupLeg = phase === "pickup";
-  const fullScreen = offer || pickupLeg;
-  const [legP, setLegP] = useState(0);
-  useEffect(() => {
-    if (!pickupLeg) return;
-    const start = performance.now() + lead;
-    let raf = 0;
-    const tick = () => {
-      const p = Math.max(0, Math.min(1, (performance.now() - start) / r.pickupLegMs));
-      setLegP(reduced && p < 1 ? Math.floor(p * 4) / 4 : p);
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    setLegP(0);
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [pickupLeg, reduced, lead, r.pickupLegMs]);
-  const arrived = pickupLeg && legP >= 1;
+  const fullScreen = offer || (pickupLeg && !navLeg);
   // What the map draws on each step: the offer, the green leg to the pickup and
   // the purple trip with the Operator's car parked at the start; on the way to
   // pickup, only the green leg (the car drives it); the agreement and the
@@ -355,7 +368,7 @@ export function DemoRideScreen({
             <span data-testid="demo-offer-countdown" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/25 px-2 py-0.5 text-xs tabular-nums">{secondsLeft}s</span>
           </button>
         </div>
-      ) : pickupLeg ? (
+      ) : pickupLeg && !navLeg ? (
         <div data-testid="demo-pickup" className="flex shrink-0 flex-col gap-2">
           <div className="flex items-center justify-between gap-2 px-1">
             <div data-testid="demo-pickup-title" className="font-display text-xl font-semibold">{arrived ? "Arrived at pickup" : "On the way to pickup"}</div>
@@ -389,7 +402,7 @@ export function DemoRideScreen({
                 <TurnIcon className="h-10 w-10" strokeWidth={2.5} />
               </div>
               <div className="min-w-0">
-                <div data-testid="guide-turn-distance" className="font-display text-3xl font-semibold leading-none">{turnDistance(turnMi)}</div>
+                <div data-testid="guide-turn-distance" className="font-display text-3xl font-semibold leading-none">{arrived ? "Arrived" : turnDistance(turnMi)}</div>
                 <div className="mt-1.5 flex items-center gap-2">
                   <span data-testid="guide-turn-street" className="line-clamp-2 text-xl font-semibold leading-tight">{turnStreet}</span>
                   {turnRef && <span className="shrink-0 rounded-md bg-white/10 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">{turnRef}</span>}
@@ -397,17 +410,20 @@ export function DemoRideScreen({
               </div>
             </div>
           </div>
-          {/* Bottom: time left, miles left and the arrival time; the customer and the fare. */}
+          {/* Bottom: time left, miles left and the arrival time; the customer and
+              the fare (on the way to pickup, the pickup address instead). */}
           <div ref={bottomRef} data-testid="guide-bottom" className="absolute inset-x-3 rounded-3xl border border-border bg-card/95 px-5 py-4 shadow-elevated backdrop-blur" style={{ bottom: "max(12px, env(safe-area-inset-bottom))" }}>
-            <div data-testid="guide-time" className="font-display text-4xl font-semibold leading-none text-success">{minutesLeft}</div>
+            <div data-testid="guide-time" className={cn("font-display font-semibold leading-none text-success", arrived ? "text-3xl" : "text-4xl")}>{arrived ? "Arrived at pickup" : navMinutes}</div>
             <div className="mt-2 flex flex-wrap items-center gap-x-2 text-base text-muted-foreground">
-              <span data-testid="guide-miles" className="font-medium text-foreground">{milesLeft}</span>
+              <span data-testid="guide-miles" className="font-medium text-foreground">{navMiles}</span>
               <span>·</span>
-              <span>Arrival <span data-testid="guide-arrival" className="font-medium text-[#22d3ee]">{arrival}</span></span>
+              <span>Arrival <span data-testid="guide-arrival" className="font-medium text-[#22d3ee]">{navArrival}</span></span>
             </div>
-            <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Customer <span data-testid="guide-customer" className="font-medium text-foreground">{r.customer}</span></span>
-              <span data-testid="guide-fare" className="font-medium text-foreground">${r.rate.total.toFixed(2)}</span>
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-2.5 text-xs text-muted-foreground">
+              <span className="inline-flex shrink-0 items-center gap-1.5"><User className="h-3.5 w-3.5" /> Customer <span data-testid="guide-customer" className="font-medium text-foreground">{r.customer}</span></span>
+              {navLeg
+                ? <span data-testid="guide-pickup-address" className="truncate font-medium text-foreground">{endStreet}</span>
+                : <span data-testid="guide-fare" className="font-medium text-foreground">${r.rate.total.toFixed(2)}</span>}
             </div>
           </div>
         </>

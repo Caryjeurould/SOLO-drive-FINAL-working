@@ -133,7 +133,10 @@ export const DEMO_RIDE = {
   /** Where the Operator starts: about 4.6 driving miles from the pickup
    *  (Mapbox Directions: 4.67 mi). */
   operatorStart: "4300 N 16th St, Phoenix, AZ",
-  /** On the way to pickup (sped up, like the trip), then "Arrived at pickup". */
+  /** On the way to pickup: the overview of the green route first, then the
+   *  navigation view while the car drives it (sped up, like the trip), then
+   *  "Arrived at pickup". */
+  pickupOverviewMs: 2000,
   pickupLegMs: 8000,
   arrivedMs: 3500,
   /** The Contracted Services card grows and settles back (6.2 s), then the drive starts. */

@@ -137,11 +137,11 @@ function mapboxToken(): string {
   return typeof window !== "undefined" ? localStorage.getItem("MAPBOX_TOKEN") || "" : "";
 }
 
-export type DemoRideRoutes = { start: LngLat; pickup: LngLat; dropoff: LngLat; leg: LngLat[]; trip: LngLat[]; tripSteps: RouteStep[] };
+export type DemoRideRoutes = { start: LngLat; pickup: LngLat; dropoff: LngLat; leg: LngLat[]; legSteps: RouteStep[]; trip: LngLat[]; tripSteps: RouteStep[] };
 const demoRideCache = new Map<string, Promise<DemoRideRoutes | null>>();
 /** Operator demo ride: the Operator's start, the pickup and the drop-off, and
  *  the two Directions routes between them (start → pickup, pickup → drop-off,
- *  with turn-by-turn steps), fetched once and kept for the page's life. */
+ *  each with turn-by-turn steps), fetched once and kept for the page's life. */
 export function fetchDemoRide(a: { start: string; pickup: string; dropoff: string }): Promise<DemoRideRoutes | null> {
   const key = `${a.start}|${a.pickup}|${a.dropoff}`;
   let p = demoRideCache.get(key);
@@ -151,9 +151,9 @@ export function fetchDemoRide(a: { start: string; pickup: string; dropoff: strin
       if (!token) return null;
       const [start, pickup, dropoff] = await Promise.all([mbGeocode(a.start, token), mbGeocode(a.pickup, token), mbGeocode(a.dropoff, token)]);
       if (!start || !pickup || !dropoff) return null;
-      const [leg, trip] = await Promise.all([mbDirections(start, pickup, token), mbDirections(pickup, dropoff, token, true)]);
+      const [leg, trip] = await Promise.all([mbDirections(start, pickup, token, true), mbDirections(pickup, dropoff, token, true)]);
       if (!leg || !trip) return null;
-      return { start, pickup, dropoff, leg: leg.coords, trip: trip.coords, tripSteps: trip.steps };
+      return { start, pickup, dropoff, leg: leg.coords, legSteps: leg.steps, trip: trip.coords, tripSteps: trip.steps };
     })();
     p.then((r) => { if (!r) demoRideCache.delete(key); });
     demoRideCache.set(key, p);
