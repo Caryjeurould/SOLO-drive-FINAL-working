@@ -19,6 +19,12 @@ const TRIP_PURPLE = "#7c5cff";
 const BREAKDOWN_HOLD_MS = 3000;
 /** How long the Call / Message notice shows. */
 const TOAST_MS = 2000;
+/** Navigation: the least room between the bottom card and the car's centre (the car's rear half and the street pill). */
+const CAR_ROOM_PX = 84;
+/** Navigation: the street pill's top, below the car's centre (the tilted car's rear half and a gap). */
+const PILL_BELOW_CAR_PX = 32;
+/** Sample speed on the navigation screens (not real data). */
+const SAMPLE_MPH = 35;
 
 /** Two short beeps with a short gap, made with Web Audio (no audio file). Silent if audio isn't available or is blocked. */
 export function playChime() {
@@ -156,10 +162,22 @@ export function DemoRideScreen({
   const navArrival = navLeg ? (acceptedAt != null ? formatTime(acceptedAt + r.operatorEtaMin * 60_000).toLowerCase() : "—") : arrival;
   const bottomRef = useRef<HTMLDivElement>(null);
   const turnRef = useRef<HTMLDivElement>(null);
-  const [bottomPx, setBottomPx] = useState(220);
+  // The car sits low, about a quarter of the way up the open road between the
+  // bottom card and the turn card (room left under it for the street pill), so
+  // most of the screen is road ahead. cardPx: the bottom card's top, from the bottom.
+  const [cardPx, setCardPx] = useState(160);
+  const [bottomPx, setBottomPx] = useState(240);
+  const [turnPx, setTurnPx] = useState(120);
   useLayoutEffect(() => {
     if (!overlays) return;
-    const measure = () => { if (bottomRef.current) setBottomPx(Math.round(bottomRef.current.getBoundingClientRect().height + 12 + 64)); };
+    const measure = () => {
+      const b = bottomRef.current?.getBoundingClientRect(), t = turnRef.current?.getBoundingClientRect();
+      if (!b || !t) return;
+      const card = Math.round(window.innerHeight - b.top);
+      setCardPx(card);
+      setTurnPx(Math.round(t.bottom));
+      setBottomPx(Math.round(card + Math.max(CAR_ROOM_PX, 0.25 * (b.top - t.bottom))));
+    };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
@@ -173,6 +191,9 @@ export function DemoRideScreen({
     : next.name || steps.slice(nextIdx + 1).find((s) => s.name)?.name || endStreet; // no name: the next road
   const turnRef2 = next && next.type !== "arrive" && next.name ? next.ref.split(";")[0] : "";
   const turnMi = next ? Math.max(0, next.startFrac - navP) * navMi : navMi * navLeft;
+  // The street the car is on now (the step it is driving), for the pill under the car.
+  const onIdx = steps.length ? Math.max(0, (nextIdx < 0 ? steps.length : nextIdx) - 1) : -1;
+  const onStreet = onIdx >= 0 ? steps[onIdx].name || steps[onIdx].ref.split(";")[0] || steps.slice(0, onIdx).reverse().find((s) => s.name)?.name || "" : "";
   // Call / Message on the bottom card: a short notice only (nothing is dialled or
   // sent, and no timer changes).
   const [toast, setToast] = useState<{ text: string; top: number } | null>(null);
@@ -283,7 +304,7 @@ export function DemoRideScreen({
   // Side gutters: 16px on phones, the content centred at max-w-3xl on wide screens.
   const gutter = "max(16px, calc((100vw - 48rem) / 2 + 16px))";
   // The Mapbox logo: inside the pickup overview's box, then just above the bottom card.
-  const logo = box && !navLeg ? { b: box[2] + 4, l: box[3] + 4 } : { b: bottomPx - 60, l: 0 };
+  const logo = box && !navLeg ? { b: box[2] + 4, l: box[3] + 4 } : { b: cardPx + 4, l: 0 };
   // The turn and bottom cards fade in (0.3 s) as the camera's move finishes.
   const cardFade: React.CSSProperties = navOn
     ? (reduced ? {} : { animation: `demo-card-in 300ms ease-out ${Math.max(0, easeMs - 300)}ms both` })
@@ -572,6 +593,17 @@ export function DemoRideScreen({
               </span>
             </div>
           </div>
+          {/* Left, under the turn card: a sample speed (fixed, not real data). */}
+          <div data-testid="guide-speed" aria-label={`Sample speed ${SAMPLE_MPH} mph`} className="pointer-events-none fixed left-3 z-10 flex h-14 w-14 flex-col items-center justify-center rounded-2xl border border-white/15 bg-[#15122a]/90 text-white shadow-elevated backdrop-blur" style={{ top: turnPx + 10, ...cardFade }}>
+            <span className="font-display text-xl font-semibold leading-none tabular-nums">{SAMPLE_MPH}</span>
+            <span className="mt-0.5 text-[10px] uppercase leading-none tracking-wider text-white/70">mph</span>
+          </div>
+          {/* Under the car: the street it is on now. */}
+          {onStreet && (
+            <div data-testid="guide-street-pill" className="pointer-events-none fixed inset-x-0 z-10 flex justify-center" style={{ bottom: bottomPx - PILL_BELOW_CAR_PX - 24, ...cardFade }}>
+              <span className="max-w-[70vw] truncate rounded-full bg-white/95 px-3 py-1 text-[13px] font-semibold leading-4 text-[#15122a] shadow-elevated">{onStreet}</span>
+            </div>
+          )}
           {toast && (
             <div role="status" data-testid="guide-toast" className="pointer-events-none fixed inset-x-6 z-20 mx-auto max-w-sm rounded-full border border-primary/30 bg-[#15122a]/95 px-4 py-2 text-center text-xs font-medium text-foreground shadow-elevated backdrop-blur" style={{ top: toast.top }}>
               {toast.text}

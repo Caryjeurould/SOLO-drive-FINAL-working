@@ -68,9 +68,32 @@ export type PreparedView = {
  *  and where it starts as a fraction (0-1) of the whole route. */
 export type RouteStep = { type: string; modifier: string; name: string; ref: string; startFrac: number };
 
-/** The guidance view's camera: street level, tilted like a driver's view. */
-const DRIVE_ZOOM = 14;
-const DRIVE_PITCH = 60;
+/** The guidance view's camera: close to the car, tilted like a driver's view. */
+export const DRIVE_ZOOM = 15.6;
+export const DRIVE_PITCH = 48;
+/** Demo ride route lines (and their darker casing): one width for every line,
+ *  growing with the zoom — about 5 px on the overviews, 15 px at the navigation zoom. */
+const ROUTE_W: [number, number][] = [[12, 5], [14, 7], [DRIVE_ZOOM, 15], [18, 20]];
+const CASE_EXTRA = 4;
+const zoomWidth = (stops: [number, number][], extra = 0) => ["interpolate", ["exponential", 1.5], ["zoom"], ...stops.flatMap(([z, w]) => [z, w + extra])];
+/** The same width at one zoom (for the demo test). */
+function routeWidthAt(z: number) {
+  const s = ROUTE_W;
+  if (z <= s[0][0]) return s[0][1];
+  for (let i = 1; i < s.length; i++) {
+    if (z <= s[i][0]) {
+      const [z0, w0] = s[i - 1], [z1, w1] = s[i];
+      const t = (1.5 ** (z - z0) - 1) / (1.5 ** (z1 - z0) - 1);
+      return w0 + (w1 - w0) * t;
+    }
+  }
+  return s[s.length - 1][1];
+}
+/** The route's casing colour: the line's colour, darker. */
+function darker(hex: string) {
+  const n = parseInt(hex.slice(1), 16), k = 0.45;
+  return `rgb(${Math.round(((n >> 16) & 255) * k)},${Math.round(((n >> 8) & 255) * k)},${Math.round((n & 255) * k)})`;
+}
 /** The camera's move from the route overview into the driver's view (zoom,
  *  tilt, turn, and over to the car), eased in and out. */
 export const DRIVE_INTRO_MS = 1000;
@@ -233,10 +256,10 @@ function topDownCarEl(): HTMLDivElement {
   const el = document.createElement("div");
   el.dataset.testid = "trip-car";
   el.dataset.kind = "top";
-  el.style.cssText = "width:44px;height:66px";
+  el.style.cssText = "width:56px;height:84px";
   const id = ++topDownCarCount;
   el.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 120" width="44" height="66">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 120" width="56" height="84">
       <defs>
         <linearGradient id="sdcBody${id}" x1="0" x2="1" y1="0" y2="0">
           <stop offset="0" stop-color="#5b3fe0"/>
@@ -443,6 +466,7 @@ export function MapboxMap({
             // Frame at the box's real size (it may have grown since the map was made).
             map.resize();
             applyPrepared(map, preparedRef.current, true);
+            map.on("zoomend", () => markLineWidths(map));
             let done = false;
             const show = () => {
               if (done || cancelled) return;
@@ -823,15 +847,19 @@ export function MapboxMap({
     const ids = pv.lines.map((l) => `demo-${l.id}`);
     for (const id of preparedLinesRef.current) {
       if (ids.includes(id)) continue;
-      if (map.getLayer(id)) map.removeLayer(id);
+      for (const layer of [id, `${id}-case`]) if (map.getLayer(layer)) map.removeLayer(layer);
       if (map.getSource(id)) map.removeSource(id);
     }
+    // Every line the same width (by zoom), each over a darker casing so it reads as a road overlay.
     for (const l of pv.lines) {
       const id = `demo-${l.id}`;
       const data = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: l.coords } };
       if (map.getSource(id)) (map.getSource(id) as any).setData(data);
       else map.addSource(id, { type: "geojson", data });
-      if (!map.getLayer(id)) map.addLayer({ id, type: "line", source: id, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": l.color, "line-width": 4, "line-opacity": 0.9 } });
+      const layout = { "line-cap": "round", "line-join": "round" };
+      if (!map.getLayer(`${id}-case`)) map.addLayer({ id: `${id}-case`, type: "line", source: id, layout, paint: { "line-color": darker(l.color), "line-width": zoomWidth(ROUTE_W, CASE_EXTRA), "line-opacity": 0.95 } });
+      else map.setPaintProperty(`${id}-case`, "line-color", darker(l.color));
+      if (!map.getLayer(id)) map.addLayer({ id, type: "line", source: id, layout, paint: { "line-color": l.color, "line-width": zoomWidth(ROUTE_W), "line-opacity": 1 } });
       else map.setPaintProperty(id, "line-color", l.color);
     }
     preparedLinesRef.current = ids;
@@ -855,7 +883,19 @@ export function MapboxMap({
     }
     routeCoordsRef.current = pv.carRoute ?? [];
     if (containerRef.current) containerRef.current.dataset.lines = pv.lines.map((l) => l.id).join(",");
+    markLineWidths(map);
     if (refit && !driveViewRef.current && pv.frame.length) fitPrepared(map, pv);
+  }
+  /** For the demo test: each route line's width (and its casing's) at the current zoom. */
+  function markLineWidths(map: any) {
+    const el = containerRef.current;
+    if (!el) return;
+    const z = map.getZoom(), w = +routeWidthAt(z).toFixed(2);
+    el.dataset.lineWidths = JSON.stringify(Object.fromEntries(preparedLinesRef.current.map((id) => {
+      const same = JSON.stringify(map.getPaintProperty(id, "line-width")) === JSON.stringify(zoomWidth(ROUTE_W));
+      const caseSame = JSON.stringify(map.getPaintProperty(`${id}-case`, "line-width")) === JSON.stringify(zoomWidth(ROUTE_W, CASE_EXTRA));
+      return [id.replace("demo-", ""), { w: same ? w : null, casing: caseSame ? +(w + CASE_EXTRA).toFixed(2) : null, casingColor: map.getPaintProperty(`${id}-case`, "line-color") ?? null, zoom: +z.toFixed(2) }];
+    })));
   }
   /** Demo ride: frame the prepared view, level and north up (an overview). */
   function fitPrepared(map: any, pv: PreparedView) {
@@ -963,9 +1003,13 @@ export function MapboxMap({
       const { from } = cam;
       const H = map.getContainer().clientHeight;
       const mix = (a: number, b: number) => a + (b - a) * e;
+      // The car's distance from the centre shrinks evenly on screen while the zoom
+      // grows (scaled back to map units at this zoom), so the car and the road
+      // around it stay in view through the whole move.
+      const zoom = mix(from.zoom, DRIVE_ZOOM), k = (1 - e) * 2 ** (from.zoom - zoom);
       map.jumpTo({
-        center: [mix(from.center[0], at[0]), mix(from.center[1], at[1])],
-        zoom: mix(from.zoom, DRIVE_ZOOM),
+        center: [at[0] + (from.center[0] - at[0]) * k, at[1] + (from.center[1] - at[1]) * k],
+        zoom,
         bearing: from.bearing + turn(from.bearing, cam.heading) * e,
         pitch: mix(from.pitch, DRIVE_PITCH),
         // The car sits low on the screen: bottomPx above the bottom edge.
@@ -996,6 +1040,57 @@ export function MapboxMap({
     }
   }, [tripProgress, driveOn, driveBottom, driveReduced]);
   useEffect(() => () => { tripMarkerRef.current?.remove(); tripMarkerRef.current = null; }, []);
+
+  // ── 7b. Demo ride, navigation only: larger, brighter street names with a soft
+  // halo, and subtle 3D buildings at the close zoom. Put back as they were when
+  // the navigation view ends (the overviews keep the style's own look).
+  useEffect(() => {
+    if (!driveOn || !token) return;
+    let cancelled = false, undo: (() => void) | null = null;
+    (async () => {
+      while (!cancelled && !mapReadyRef.current) await new Promise((r) => setTimeout(r, 50));
+      const map = mapRef.current;
+      if (cancelled || !map) return;
+      const labels = (map.getStyle()?.layers ?? []).filter((l: any) => l.type === "symbol" && l["source-layer"] === "road" && /label/.test(l.id) && !/shield|exit|number/.test(l.id));
+      const before = labels.map((l: any) => ({ id: l.id, size: map.getLayoutProperty(l.id, "text-size"), color: map.getPaintProperty(l.id, "text-color"), halo: map.getPaintProperty(l.id, "text-halo-color"), haloW: map.getPaintProperty(l.id, "text-halo-width"), blur: map.getPaintProperty(l.id, "text-halo-blur") }));
+      for (const l of labels) {
+        map.setLayoutProperty(l.id, "text-size", ["interpolate", ["linear"], ["zoom"], 13, 11, DRIVE_ZOOM, 12.5, 18, 13]);
+        map.setPaintProperty(l.id, "text-color", "#f4f2ff");
+        map.setPaintProperty(l.id, "text-halo-color", "rgba(10,8,24,0.9)");
+        map.setPaintProperty(l.id, "text-halo-width", 1.6);
+        map.setPaintProperty(l.id, "text-halo-blur", 0.6);
+      }
+      // 3D buildings under the labels and the route; they fade in from zoom 14.8 (navigation only).
+      const firstSymbol = (map.getStyle()?.layers ?? []).find((l: any) => l.type === "symbol")?.id;
+      if (map.getSource("composite") && !map.getLayer("demo-buildings")) {
+        map.addLayer({
+          id: "demo-buildings", type: "fill-extrusion", source: "composite", "source-layer": "building", minzoom: 14.8,
+          filter: ["==", ["get", "extrude"], "true"],
+          paint: {
+            "fill-extrusion-color": "#2a2440",
+            "fill-extrusion-height": ["get", "height"],
+            "fill-extrusion-base": ["get", "min_height"],
+            "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 14.8, 0, DRIVE_ZOOM, 0.35],
+          },
+        }, firstSymbol);
+      }
+      const el = containerRef.current;
+      if (el) { el.dataset.navStyle = JSON.stringify({ labels: labels.length, labelSize: 12.5 }); el.dataset.buildings = map.getLayer("demo-buildings") ? "1" : "0"; }
+      undo = () => {
+        for (const b of before) {
+          if (!map.getLayer(b.id)) continue;
+          map.setLayoutProperty(b.id, "text-size", b.size);
+          map.setPaintProperty(b.id, "text-color", b.color);
+          map.setPaintProperty(b.id, "text-halo-color", b.halo);
+          map.setPaintProperty(b.id, "text-halo-width", b.haloW);
+          map.setPaintProperty(b.id, "text-halo-blur", b.blur);
+        }
+        if (map.getLayer("demo-buildings")) map.removeLayer("demo-buildings");
+        if (el) { delete el.dataset.navStyle; el.dataset.buildings = "0"; }
+      };
+    })();
+    return () => { cancelled = true; if (undo && mapRef.current) undo(); };
+  }, [driveOn, token]);
 
   // ── No-token placeholder ─────────────────────────────────────────────────
   if (!token) {
