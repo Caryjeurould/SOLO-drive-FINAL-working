@@ -10,6 +10,11 @@ export type SiteRole = "admin" | "visitor";
 
 export const ROLE_COOKIE = "solo-role";
 
+/** With a temporary access code (a visitor), the time left in this opening in
+ *  ms, rewritten on every request; at the end the page reloads to the password
+ *  page (see useCodeSessionEnd). */
+export const CODE_LEFT_COOKIE = "solo-code-left";
+
 let cached: SiteRole | null | undefined;
 
 /** The role the server reported when this page loaded, or null on the server

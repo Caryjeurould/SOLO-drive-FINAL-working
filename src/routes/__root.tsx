@@ -12,7 +12,7 @@ import {
 import { AuthProvider, useAuth, setAuthMessage, WRONG_APP_MESSAGE } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { DownloadPopupProvider } from "@/components/DownloadPopupProvider";
-import { OpenOnPhone, useVisitorDemo } from "@/components/VisitorDemo";
+import { OpenOnPhone, useCodeSessionEnd, useVisitorDemo } from "@/components/VisitorDemo";
 import { registerServiceWorker, getInstalledAppKind, appRedirectFor, appForPath } from "@/lib/pwa";
 import { getSiteRole, isVisitor, roleRedirectFor } from "@/lib/site-role";
 import { useEffect, useRef } from "react";
@@ -158,6 +158,7 @@ function RootComponent() {
 
 /** The page, or — the visitor demo on a computer — only "open on your phone". */
 function DemoOutlet() {
+  useCodeSessionEnd();
   return useVisitorDemo() ? <OpenOnPhone /> : <Outlet />;
 }
 

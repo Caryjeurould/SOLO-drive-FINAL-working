@@ -8,7 +8,7 @@ import {
   setResponseStatus,
   html,
 } from "h3";
-import { ROLE_COOKIE, roleRedirectFor, type SiteRole } from "../../src/lib/site-role";
+import { CODE_LEFT_COOKIE, ROLE_COOKIE, roleRedirectFor, type SiteRole } from "../../src/lib/site-role";
 
 const COOKIE_NAME = "solo-auth";
 const COOKIE_OPTIONS = {
@@ -35,6 +35,48 @@ const AUTH_TOKEN = PASSWORD ? createHmac("sha256", PASSWORD).update("solo-auth:v
 const VISITOR_TOKEN = VISITOR_PASSWORD
   ? createHmac("sha256", VISITOR_PASSWORD).update("solo-auth:v1:visitor").digest("hex")
   : null;
+
+// Temporary access codes (visitors): checked and counted by the access-codes
+// Supabase Edge Function, which alone can reach their table. A sign-in with a
+// code gets a cookie signed here (keyed with APP_PASSWORD) that ends with the
+// opening (about 30 minutes); it then gets the password page again. Without
+// CODES_KEY there are no code sign-ins.
+const CODES_KEY = process.env.CODES_KEY || null;
+const CODES_URL = process.env.VITE_SUPABASE_URL ? `${process.env.VITE_SUPABASE_URL.replace(/\/$/, "")}/functions/v1/access-codes` : null;
+const CODE_SIGNING_KEY = PASSWORD ? createHmac("sha256", PASSWORD).update("solo-auth:v1:code").digest() : null;
+/** 8 characters, uppercase letters and digits without 0, O, 1, I or L (typed in any case, spaces and dashes ignored). */
+const CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/;
+const normalizeCode = (typed: string) => typed.toUpperCase().replace(/[\s-]/g, "");
+
+const codeSignature = (body: string) => createHmac("sha256", CODE_SIGNING_KEY!).update(body).digest("base64url");
+const codeToken = (opening: number, expires: number) => {
+  const body = `c1.${opening}.${expires}`;
+  return `${body}.${codeSignature(body)}`;
+};
+/** When a code sign-in's cookie ends (ms), or null if it isn't one, is forged or has ended. */
+function codeSessionEnd(cookie: string): number | null {
+  const m = /^(c1\.\d\.(\d{13}))\.([\w-]+)$/.exec(cookie);
+  if (!m || !CODE_SIGNING_KEY || !safeEqual(m[3], codeSignature(m[1]))) return null;
+  const end = Number(m[2]);
+  return end > Date.now() ? end : null;
+}
+
+/** Asks the Edge Function to count an opening for this code. */
+async function signInWithCode(code: string): Promise<{ opening: number; expires: number } | null> {
+  if (!CODES_KEY || !CODES_URL || !CODE_SIGNING_KEY) return null;
+  try {
+    const r = await fetch(CODES_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-codes-key": CODES_KEY },
+      body: JSON.stringify({ action: "signin", code }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const j = (await r.json()) as { ok?: boolean; opening?: number; expires?: number };
+    return r.ok && j.ok && typeof j.opening === "number" && typeof j.expires === "number" && j.expires > Date.now() ? { opening: j.opening, expires: j.expires } : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Constant-time string comparison (hashing first makes the lengths equal). */
 function safeEqual(a: string, b: string): boolean {
@@ -63,13 +105,22 @@ export default defineEventHandler(async (event) => {
   }
 
   const cookie = getCookie(event, COOKIE_NAME);
+  const codeEnd = cookie?.startsWith("c1.") ? codeSessionEnd(cookie) : null;
   const role: SiteRole | null = !cookie
     ? null
     : safeEqual(cookie, AUTH_TOKEN)
       ? "admin"
-      : VISITOR_TOKEN && safeEqual(cookie, VISITOR_TOKEN)
+      : (VISITOR_TOKEN && safeEqual(cookie, VISITOR_TOKEN)) || codeEnd !== null
         ? "visitor"
         : null;
+  if (cookie?.startsWith("c1.") && codeEnd === null) {
+    // The opening has ended: back to the password page, signed out.
+    for (const name of [COOKIE_NAME, ROLE_COOKIE, CODE_LEFT_COOKIE]) setCookie(event, name, "", { ...COOKIE_OPTIONS, maxAge: 0 });
+  }
+  if (codeEnd !== null) {
+    const left = codeEnd - Date.now();
+    setCookie(event, CODE_LEFT_COOKIE, String(left), { ...COOKIE_OPTIONS, maxAge: Math.ceil(left / 1000) });
+  }
   if (role) {
     // Tell the page which role it is (the signed cookie above is hidden
     // from page scripts). Rewritten whenever it doesn't match.
@@ -90,12 +141,26 @@ export default defineEventHandler(async (event) => {
     if (token) {
       setCookie(event, COOKIE_NAME, token, { ...COOKIE_OPTIONS, httpOnly: true });
       setCookie(event, ROLE_COOKIE, token === AUTH_TOKEN ? "admin" : "visitor", COOKIE_OPTIONS);
+      setCookie(event, CODE_LEFT_COOKIE, "", { ...COOKIE_OPTIONS, maxAge: 0 });
       return sendRedirect(event, next, 302);
     }
-    return html(passwordHtml(true, next));
+    // Something shaped like an access code: one opening of it (a visitor), or
+    // only the plain "no longer active" line — never why.
+    const code = typed === null ? "" : normalizeCode(typed);
+    if (CODE_RE.test(code)) {
+      const opening = await signInWithCode(code);
+      if (!opening) return html(passwordHtml("code", next));
+      const left = opening.expires - Date.now();
+      const options = { ...COOKIE_OPTIONS, maxAge: Math.ceil(left / 1000) };
+      setCookie(event, COOKIE_NAME, codeToken(opening.opening, opening.expires), { ...options, httpOnly: true });
+      setCookie(event, ROLE_COOKIE, "visitor", options);
+      setCookie(event, CODE_LEFT_COOKIE, String(left), options);
+      return sendRedirect(event, next, 302);
+    }
+    return html(passwordHtml("password", next));
   }
 
-  return html(passwordHtml(false, path));
+  return html(passwordHtml(null, path));
 });
 
 /** Where to go after the password: back to the page that asked for it (so an
@@ -107,7 +172,7 @@ function safeNext(next: unknown): string {
 
 const escapeAttr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-function passwordHtml(error: boolean, next: string): string {
+function passwordHtml(error: "password" | "code" | null, next: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -211,7 +276,7 @@ function passwordHtml(error: boolean, next: string): string {
       <input type="hidden" name="next" value="${escapeAttr(safeNext(next))}">
       <label for="pw">Password</label>
       <input id="pw" name="password" type="password" autofocus autocomplete="current-password" placeholder="••••••••">
-      ${error ? '<p class="error">&#10005; Incorrect password. Please try again.</p>' : ""}
+      ${error === "password" ? '<p class="error">&#10005; Incorrect password. Please try again.</p>' : error === "code" ? '<p class="error">This access code is no longer active. Please contact SOLO.drive.</p>' : ""}
       <button type="submit">Continue &rarr;</button>
     </form>
   </div>

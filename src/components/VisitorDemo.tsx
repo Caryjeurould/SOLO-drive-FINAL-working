@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { Car } from "lucide-react";
 import { appForPath, getInstalledAppKind } from "@/lib/pwa";
-import { useIsVisitor } from "@/lib/site-role";
+import { CODE_LEFT_COOKIE, useIsVisitor } from "@/lib/site-role";
 import { useDemoState } from "@/lib/demo";
 
 /** A computer: a wide screen with a mouse and no touch screen at all. A phone,
@@ -65,6 +65,26 @@ export function useVisitorDemo(): boolean {
   }, [active, started, pathname, navigate]);
 
   return active && computer;
+}
+
+/** Signed in with a temporary access code: when this opening ends (the time
+ *  left comes from the server, so the phone's clock doesn't matter), reload,
+ *  and the server shows the password page again. */
+export function useCodeSessionEnd() {
+  useEffect(() => {
+    const m = document.cookie.match(new RegExp(`(?:^|;\\s*)${CODE_LEFT_COOKIE}=(\\d+)(?:;|$)`));
+    if (!m) return;
+    const left = Number(m[1]) + 500; // a moment past the end, so the server sees it ended
+    const end = Date.now() + left;
+    const t = window.setTimeout(() => window.location.reload(), left);
+    // A phone may pause the timer while the tab is hidden: check on return.
+    const check = () => { if (document.visibilityState === "visible" && Date.now() >= end) window.location.reload(); };
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, []);
 }
 
 /** The visitor demo on a computer: one centred line on the dark background. */
