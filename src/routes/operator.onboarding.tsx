@@ -48,7 +48,8 @@ const STAGES = [
 
 function InstalledAppOnboarding() {
   const navigate = useNavigate();
-  const allowed = useInstalledAppOnly("operator", () => navigate({ to: "/", search: { openDownloads: true }, replace: true }));
+  // The visitor demo also runs in a browser tab; real onboarding stays app-only.
+  const allowed = useInstalledAppOnly("operator", () => navigate({ to: "/", search: { openDownloads: true }, replace: true }), isVisitor());
   return allowed ? <OnboardingWizard /> : null;
 }
 

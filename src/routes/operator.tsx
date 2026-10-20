@@ -118,8 +118,9 @@ async function fetchApproxArea(): Promise<[number, number] | null> {
 }
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-/** The online map never gets shorter than this; only screens too short for it scroll. */
-const ONLINE_MAP_MIN_PX = 200;
+/** The online map never gets shorter than this (a phone browser's visible area,
+ *  e.g. 360x560, still fits); only screens too short for it scroll. */
+const ONLINE_MAP_MIN_PX = 120;
 /** Demo: [Mon … Sun] hours, the week so far by the clock (demoWeekSoFar),
  *  plus the online sessions the visitor adds on top (Go online → Stop),
  *  within the 10 h daily and 50 h weekly caps. */

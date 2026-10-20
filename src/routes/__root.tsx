@@ -12,6 +12,7 @@ import {
 import { AuthProvider, useAuth, setAuthMessage, WRONG_APP_MESSAGE } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { DownloadPopupProvider } from "@/components/DownloadPopupProvider";
+import { OpenOnPhone, useVisitorDemo } from "@/components/VisitorDemo";
 import { registerServiceWorker, getInstalledAppKind, appRedirectFor, appForPath } from "@/lib/pwa";
 import { getSiteRole, isVisitor, roleRedirectFor } from "@/lib/site-role";
 import { useEffect, useRef } from "react";
@@ -148,11 +149,16 @@ function RootComponent() {
           <InstalledAppGuard />
           <RoleGuard />
           <AccountTypeGuard />
-          <Outlet />
+          <DemoOutlet />
         </DownloadPopupProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
+}
+
+/** The page, or — the visitor demo on a computer — only "open on your phone". */
+function DemoOutlet() {
+  return useVisitorDemo() ? <OpenOnPhone /> : <Outlet />;
 }
 
 /** Inside an installed app (Operator or Customer), keeps the visitor on that

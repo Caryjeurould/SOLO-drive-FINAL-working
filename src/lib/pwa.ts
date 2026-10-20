@@ -91,17 +91,21 @@ export function appRedirectFor(kind: AppKind, pathname: string): string | null {
  *  its own start screen by the site-wide guard) and stays false, so nothing of
  *  the page renders. Runs right after the first render — not in beforeLoad —
  *  because redirecting during hydration makes React's first render disagree
- *  with the server's HTML. */
-export function useInstalledAppOnly(kind: AppKind, redirect: () => void): boolean {
+ *  with the server's HTML. With `allowBrowserTab` (the visitor demo) a browser
+ *  tab is allowed too. */
+export function useInstalledAppOnly(kind: AppKind, redirect: () => void, allowBrowserTab = false): boolean {
   const [allowed, setAllowed] = useState(false);
   const redirectRef = useRef(redirect);
   redirectRef.current = redirect;
   useEffect(() => {
     const current = getInstalledAppKind();
     if (current === kind) setAllowed(true);
-    else if (current === null) redirectRef.current();
+    else if (current === null) {
+      if (allowBrowserTab) setAllowed(true);
+      else redirectRef.current();
+    }
     // current is the other app: the site-wide guard redirects it to its start.
-  }, [kind]);
+  }, [kind, allowBrowserTab]);
   return allowed;
 }
 

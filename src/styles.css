@@ -103,6 +103,8 @@
   html, body { background: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); }
   /* Safety net only: the real fixes are at the elements (min-w-0 / wrapping). */
   html, body { overflow-x: clip; }
+  /* Visitor demo: no pull-to-refresh (it would wipe the demo) and no bounce. */
+  html.visitor-demo, html.visitor-demo body { overscroll-behavior: none; }
   h1,h2,h3,h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
 }
 

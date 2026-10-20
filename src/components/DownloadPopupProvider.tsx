@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { DownloadPopup } from "@/components/DownloadPopup";
-import { getInstalledAppKind } from "@/lib/pwa";
+import { appForPath, getInstalledAppKind } from "@/lib/pwa";
+import { isVisitor } from "@/lib/site-role";
 
 const IDLE_MS = 15000;
 
@@ -22,9 +23,10 @@ function rememberDismissed() {
   try { sessionStorage.setItem(DISMISSED_KEY, "1"); } catch {}
 }
 
-/** Never on an install page or inside an installed app (Operator or Customer). */
+/** Never on an install page, inside an installed app (Operator or Customer) or
+ *  in the visitor demo (the Operator pages, which also run in a browser tab). */
 function popupBlockedAt(pathname: string): boolean {
-  return NO_POPUP_PATHS.has(pathname) || getInstalledAppKind() !== null;
+  return NO_POPUP_PATHS.has(pathname) || getInstalledAppKind() !== null || (isVisitor() && appForPath(pathname) === "operator");
 }
 
 /** Everything that counts as the visitor being active. Listened to on window

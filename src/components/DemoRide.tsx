@@ -372,7 +372,7 @@ export function DemoRideScreen({
       data-phase={phase}
       data-view={guidance ? "guidance" : "classic"}
       className={guideLayout
-        ? "fixed inset-x-0 top-0 z-[60] h-[100svh] overflow-hidden bg-background"
+        ? "fixed inset-x-0 top-0 z-[60] h-dvh overflow-hidden bg-background"
         : fullScreen
           // On the way to pickup the screen sits above the header, so the map can open up over it.
           ? cn("fixed inset-x-0 bottom-0 flex flex-col gap-2 overflow-hidden bg-background pt-3 pb-[max(12px,env(safe-area-inset-bottom))]", pickupLeg ? "z-[60]" : "z-20")
@@ -485,7 +485,7 @@ export function DemoRideScreen({
                   const el = e.currentTarget;
                   if (el.scrollHeight - el.scrollTop - el.clientHeight < 2) setRowsEnd(true);
                 }}
-                className="max-h-[114px] overflow-y-auto overscroll-contain pr-1 [touch-action:pan-y] [-webkit-tap-highlight-color:transparent]"
+                className="max-h-[114px] overflow-y-auto overscroll-contain [@media(max-height:580px)]:max-h-[90px] pr-1 [touch-action:pan-y] [-webkit-tap-highlight-color:transparent]"
               >
                 {DEMO_RATE_ROWS.map((row) => (
                   <div key={row.label} data-testid="demo-rate-row" className="flex items-center justify-between gap-3 border-t border-primary/15 py-0.5 first:border-t-0">

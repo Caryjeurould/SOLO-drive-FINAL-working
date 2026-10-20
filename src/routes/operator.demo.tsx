@@ -9,9 +9,8 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/operator/demo")({
   // The visitor demo's first screen: the visitor's name, typed once, fills
-  // every name in the demo. Like onboarding, it exists only inside the
-  // installed Operator app (browser tabs go to the homepage with the
-  // Downloads pop-up open), and only for visitors (see roleRedirectFor).
+  // every name in the demo. Only for visitors (see roleRedirectFor), in the
+  // installed Operator app or a phone's browser tab.
   ssr: false,
   head: () => ({ meta: [{ title: "Demo — SOLO.drive Operator" }] }),
   component: InstalledAppDemoStart,
@@ -19,7 +18,7 @@ export const Route = createFileRoute("/operator/demo")({
 
 function InstalledAppDemoStart() {
   const navigate = useNavigate();
-  const allowed = useInstalledAppOnly("operator", () => navigate({ to: "/", search: { openDownloads: true }, replace: true }));
+  const allowed = useInstalledAppOnly("operator", () => navigate({ to: "/", search: { openDownloads: true }, replace: true }), isVisitor());
   return allowed && isVisitor() ? <DemoNameScreen /> : null;
 }
 
@@ -43,10 +42,10 @@ function useVisibleArea() {
   return area;
 }
 
-/** Below this visible height (the keyboard is open, or a very short screen) the
- *  name card moves to the top of what is visible, without the logo, so both
- *  names and Start Demo stay in view. */
-const COMPACT_BELOW_PX = 520;
+/** Below this visible height (the keyboard is open, or a short browser area
+ *  such as 360x560) the name card moves to the top of what is visible, without
+ *  the logo, so both names and Start Demo stay in view. */
+const COMPACT_BELOW_PX = 600;
 
 /** The demo's later pages. Their code is loaded here, at the start of every run:
  *  a page opened before a new deployment (an app left open, then reopened)
@@ -83,13 +82,13 @@ function DemoNameScreen() {
   };
 
   return (
-    <div className="demo-step-in min-h-screen bg-background px-4 py-12">
+    <div className="demo-step-in min-h-dvh bg-background px-4 py-4">
       <div className="absolute inset-0 bg-gradient-hero opacity-40" />
       {/* While compact, the card is pinned to the visible area (it follows the
           keyboard); otherwise centred as before. */}
       <div
         data-testid="demo-name-area"
-        className={cn("mx-auto flex max-w-md flex-col", compact ? "fixed inset-x-0 z-10 overflow-y-auto px-4 py-3" : "relative min-h-[80vh] justify-center")}
+        className={cn("mx-auto flex max-w-md flex-col", compact ? "fixed inset-x-0 z-10 overflow-y-auto px-4 py-3" : "relative min-h-[80dvh] justify-center")}
         style={compact && area ? { top: area.top, height: area.height } : undefined}
       >
         <div className={cn("flex flex-col items-center gap-3 text-center", compact && "hidden")}>
