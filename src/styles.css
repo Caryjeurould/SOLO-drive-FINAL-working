@@ -215,6 +215,11 @@
   50% { filter: brightness(1.45); box-shadow: 0 0 0 6px oklch(0.72 0.20 285 / 55%), 0 0 44px 10px oklch(0.62 0.22 275 / 70%); }
 }
 .animate-golive-flash { animation: golive-flash 1.1s ease-in-out infinite; }
+/* Demo: Go online is round in every state — no grey tap rectangle, no square
+   focus outline when tapped; keyboard focus gets a round ring. */
+.demo-golive-wrap, .demo-golive { -webkit-tap-highlight-color: transparent; }
+.demo-golive:focus, .demo-golive:active { outline: none; }
+.demo-golive:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
 
 /* Demo ride steps: each new step fades up from the page background over 0.4 s
    (a curtain over the screen that clears), and the last one fades out before
@@ -225,6 +230,8 @@
 .demo-curtain-out { animation: demo-curtain-close 0.4s ease-in forwards; }
 @keyframes demo-step-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .demo-step-in { animation: demo-step-in 0.4s ease-out both; }
+/* Demo ride: the navigation cards fade in as the camera settles. */
+@keyframes demo-card-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .demo-curtain-in, .demo-curtain-out { display: none; }
   .demo-step-in { animation: none; }

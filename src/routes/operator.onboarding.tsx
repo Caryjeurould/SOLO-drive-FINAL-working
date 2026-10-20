@@ -67,6 +67,10 @@ function OnboardingWizard() {
   const demoStarted = useDemoState().started;
 
   useEffect(() => { setActive(state.stage); }, [state.stage]);
+  // The furthest stage reached so far: the stage rows open only up to it (going
+  // back works; skipping ahead does not — Next stays the way forward).
+  const [furthest, setFurthest] = useState<number>(state.stage);
+  useEffect(() => { setFurthest((f) => Math.max(f, active, state.stage)); }, [active, state.stage]);
   useEffect(() => {
     if (demo && !demoStarted) navigate({ to: "/operator/demo", replace: true });
   }, [demo, demoStarted, navigate]);
@@ -185,7 +189,7 @@ function OnboardingWizard() {
     if (n === 3) return state.data.bgStatus === "cleared";
     return !!state.data.stage4Complete;
   };
-  const canOpen = (n: 1 | 2 | 3 | 4) => n === 1 || stageComplete(n - 1);
+  const canOpen = (n: 1 | 2 | 3 | 4) => n <= furthest && (n === 1 || stageComplete(n - 1));
 
   const advance = (from: 1 | 2 | 3 | 4) => {
     const next = (from + 1) as 1 | 2 | 3 | 4;
@@ -232,8 +236,8 @@ function OnboardingWizard() {
         {/* Stepper */}
         <div className="mt-8 grid gap-3 md:grid-cols-4">
           {STAGES.map((s) => {
-            const done = stageComplete(s.n);
             const open = canOpen(s.n as 1 | 2 | 3 | 4);
+            const done = stageComplete(s.n);
             const isActive = active === s.n;
             const Icon = done ? Check : open ? s.icon : Lock;
             return (
@@ -241,12 +245,17 @@ function OnboardingWizard() {
                 key={s.n}
                 onClick={() => open && setActive(s.n as 1 | 2 | 3 | 4)}
                 disabled={!open}
+                data-testid={demo ? `stage-row-${s.n}` : undefined}
+                data-open={demo ? String(open) : undefined}
                 className={cn(
                   "group relative flex items-center gap-3 rounded-2xl border p-4 text-left transition",
                   isActive ? "border-primary/60 bg-gradient-surface shadow-glow" :
                   done ? "border-success/30 bg-success/5" :
                   open ? "border-border bg-card hover:border-primary/40" :
-                  "border-border bg-muted/30 opacity-60 cursor-not-allowed",
+                  // Locked: no tap flash, no hover, no pointer.
+                  "border-border bg-muted/30 opacity-60 cursor-not-allowed [-webkit-tap-highlight-color:transparent]",
+                  // A completed stage not reached yet keeps its check but does not open.
+                  !open && done && !isActive && "cursor-not-allowed [-webkit-tap-highlight-color:transparent]",
                 )}
               >
                 <div className={cn(

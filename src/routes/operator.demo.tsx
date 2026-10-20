@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowRight, Car } from "lucide-react";
 import { useInstalledAppOnly } from "@/lib/pwa";
@@ -48,12 +48,34 @@ function useVisibleArea() {
  *  names and Start Demo stay in view. */
 const COMPACT_BELOW_PX = 520;
 
+/** The demo's later pages. Their code is loaded here, at the start of every run:
+ *  a page opened before a new deployment (an app left open, then reopened)
+ *  asks for code files that no longer exist, and the router then reloads the
+ *  page, wiping the demo, the first time one of those pages opens (e.g.
+ *  Document Vault). Loading them now, while nothing has been entered yet,
+ *  finds that out at once; the name screen then reloads itself with the new
+ *  version. */
+const DEMO_PAGES = ["/operator/onboarding", "/operator", "/operator/vault"] as const;
+function usePreloadDemoPages() {
+  const router = useRouter();
+  useEffect(() => {
+    let stale = false;
+    const onMissing = (e: Event) => { e.preventDefault(); stale = true; };
+    window.addEventListener("vite:preloadError", onMissing);
+    Promise.all(DEMO_PAGES.map((id) => { const route = router.routesById[id]; return route ? Promise.resolve(router.loadRouteChunk(route)).catch(() => {}) : null; })).then(() => {
+      window.removeEventListener("vite:preloadError", onMissing);
+      if (stale) window.location.reload();
+    });
+  }, [router]);
+}
+
 function DemoNameScreen() {
   const navigate = useNavigate();
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const area = useVisibleArea();
   const compact = !!area && area.height < COMPACT_BELOW_PX;
+  usePreloadDemoPages();
 
   const begin = (firstName: string, lastName: string) => {
     startDemo(firstName, lastName);

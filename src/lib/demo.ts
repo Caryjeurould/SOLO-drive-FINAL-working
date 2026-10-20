@@ -128,8 +128,9 @@ export const DEMO_RIDE = {
   phaseHoldMs: 1000,
   /** "Incoming ride request", then the offer. */
   requestMs: 2600,
-  /** The offer's countdown: Accept, or auto-accept at zero. */
-  autoAcceptMs: 10000,
+  /** The offer's countdown: Accept, or auto-accept at zero (it holds while the
+   *  visitor touches or scrolls the Smart+Rate™ breakdown, until 3 s after). */
+  autoAcceptMs: 7000,
   /** Where the Operator starts: about 4.6 driving miles from the pickup
    *  (Mapbox Directions: 4.67 mi). */
   operatorStart: "4300 N 16th St, Phoenix, AZ",
@@ -149,6 +150,17 @@ export const DEMO_RIDE = {
   completeMs: 3600,
   thanksMs: 2700,
 };
+/** The offer's Smart+Rate™ breakdown, top to bottom: label, amount (placeholder
+ *  amounts), whether it is added on top ("+"), and the short line saying what it
+ *  is based on. The offer screen draws its rows from this list only. */
+export const DEMO_RATE_ROWS: { label: string; amount: number; add: boolean; basis: string }[] = [
+  { label: "Base", amount: DEMO_RIDE.rate.base, add: false, basis: "Starting amount" },
+  { label: "Distance", amount: DEMO_RIDE.rate.distance, add: false, basis: `${DEMO_RIDE.tripMi.toFixed(1)} mi` },
+  { label: "Fuel index", amount: DEMO_RIDE.rate.fuelAdj, add: true, basis: "Current fuel index" },
+  { label: "Peak time", amount: DEMO_RIDE.rate.peakAdj, add: true, basis: "None at this hour" },
+  { label: "Weekend", amount: DEMO_RIDE.rate.weekendAdj, add: true, basis: "Weekday" },
+  { label: "Event", amount: DEMO_RIDE.rate.eventAdj, add: true, basis: "No event nearby" },
+];
 /** Which drive screen the demo ride shows after the Contracted Services card:
  *  "guidance" = full-screen navigation (tilted map following the car, turn
  *  card, time / miles / arrival card); "classic" = the route map with the
@@ -395,6 +407,8 @@ export function demoBillingCycle(now = new Date()) {
     paid: [0, -1, -2].map(firstOf),
   };
 }
+/** "1 ride", "6 rides", "0 deliveries": the count with the right form of the word. */
+export const countOf = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 export const demoDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 export type DemoJob = {

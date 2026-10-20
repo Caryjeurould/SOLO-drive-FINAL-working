@@ -16,7 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { isVisitor, useIsVisitor } from "@/lib/site-role";
 import {
   DEMO_ACCESS_FEE, DEMO_DEFAULT_NAME, DEMO_DOCS, DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DRIVE_VIEW, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM,
-  demoBillingCycle, demoDate, demoWeekSoFar, markDemoGlidedBack, resetDemo, useDemoState,
+  countOf, demoBillingCycle, demoDate, demoWeekSoFar, markDemoGlidedBack, resetDemo, useDemoState,
 } from "@/lib/demo";
 import { MapboxMap } from "@/components/MapboxMap";
 import { Pill, generatePoNumber } from "@/components/SmartRateBooking";
@@ -257,7 +257,8 @@ function OperatorDashboard() {
       case "request":
         return after(lead + DEMO_RIDE.requestMs, () => setRide((r) => ({ ...r, phase: "offer" })));
       case "offer":
-        return after(lead + DEMO_RIDE.autoAcceptMs, acceptRide);
+        // The offer screen counts down (it can hold while the breakdown is touched) and accepts at zero.
+        return;
       case "csa":
         return after(lead + DEMO_RIDE.csaMs, () => setRide((r) => ({ ...r, phase: "pickup" })));
       case "pickup":
@@ -450,9 +451,17 @@ function OperatorDashboard() {
         {/* Go online card */}
         <section className={cn("grid gap-6", showMap ? "mt-2" : "mt-8 lg:grid-cols-[1.2fr_1fr]")}>
           <div className="flex min-w-0 flex-col gap-6">
-          <div ref={onlineCardRef} className={cn("relative overflow-hidden rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated", showMap && "pb-12")}>
-            <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-primary opacity-20 blur-3xl" />
-            <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          {/* Demo: the card itself doesn't clip (so Go online's round pulse is never cut
+              off square); only its background glow is clipped, in a layer of its own. */}
+          <div ref={onlineCardRef} className={cn("relative rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated", !demo && "overflow-hidden", showMap && "pb-12")}>
+            {demo ? (
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
+                <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-primary opacity-20 blur-3xl" />
+              </div>
+            ) : (
+              <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-primary opacity-20 blur-3xl" />
+            )}
+            <div className={cn("relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between", demo && "demo-golive-wrap")}>
               <div>
                 <div className="text-xs uppercase tracking-widest text-muted-foreground">Status</div>
                 <div className="mt-2 flex items-center gap-3">
@@ -525,7 +534,9 @@ function OperatorDashboard() {
                       : "border-primary/40 bg-gradient-primary text-primary-foreground shadow-glow hover:scale-105"
                     : "cursor-not-allowed border-border bg-muted text-muted-foreground/60",
                   goFlash && !online && "animate-golive-flash",
+                  demo && "demo-golive",
                 )}
+                data-testid={demo ? "go-online" : undefined}
               >
                 {goOnline.isPending || goOffline.isPending ? (
                   <Loader2 className="h-8 w-8 animate-spin" />
@@ -686,7 +697,7 @@ function OperatorDashboard() {
             icon={<CheckCircle2 className="h-4 w-4" />}
             label="Rides & deliveries this week"
             value={String(tripCount)}
-            sub={week ? `${week.rides} rides · ${week.deliveries} deliveries` : undefined}
+            sub={week ? `${countOf(week.rides, "ride", "rides")} · ${countOf(week.deliveries, "delivery", "deliveries")}` : undefined}
           />
           {demo && (
             <div className="rounded-2xl border border-amber-300/30 bg-amber-300/5 p-5 shadow-card">
@@ -853,7 +864,7 @@ function BillingCycle() {
           }}
         />
       </div>
-      <div className="mt-1.5 text-xs text-muted-foreground">{daysPast} days past · {daysLeft} days left</div>
+      <div className="mt-1.5 text-xs text-muted-foreground">{countOf(daysPast, "day", "days")} past · {countOf(daysLeft, "day", "days")} left</div>
       <div className="text-xs text-muted-foreground">Next access fee ${DEMO_ACCESS_FEE} due {demoDate(nextDue)}</div>
     </div>
   );

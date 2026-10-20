@@ -71,8 +71,9 @@ export type RouteStep = { type: string; modifier: string; name: string; ref: str
 /** The guidance view's camera: street level, tilted like a driver's view. */
 const DRIVE_ZOOM = 14;
 const DRIVE_PITCH = 60;
-/** The tilt and glide from the route overview into the driver's view. */
-const DRIVE_INTRO_MS = 1500;
+/** The camera's move from the route overview into the driver's view (zoom,
+ *  tilt, turn, and over to the car), eased in and out. */
+export const DRIVE_INTRO_MS = 1000;
 
 const ENV_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string) || "";
 /** The smallest box holding all these points. */
@@ -223,29 +224,54 @@ function simCarEl(): HTMLDivElement {
   return el;
 }
 
-/** The demo ride's guidance view: the Operator's car from above (front up) —
- *  four wheels, rounded hood, windshield, roof, rear window — in the Operator
- *  car's purple.
- *  Laid flat on the map, so the tilted camera sees it from behind. */
+/** The demo ride's guidance view: the Operator's car from above (nose up) —
+ *  shadow, four wheels, mirrors, purple body with a white outline, windshield,
+ *  roof, rear window, headlights and taillights. Laid flat on the map, so the
+ *  tilted camera sees it from behind. Each car gets its own gradient ids. */
+let topDownCarCount = 0;
 function topDownCarEl(): HTMLDivElement {
   const el = document.createElement("div");
   el.dataset.testid = "trip-car";
   el.dataset.kind = "top";
-  el.style.cssText = "width:40px;height:72px";
+  el.style.cssText = "width:44px;height:66px";
+  const id = ++topDownCarCount;
   el.innerHTML = `
-    <svg width="40" height="72" viewBox="0 0 30 54" xmlns="http://www.w3.org/2000/svg">
-      <g data-wheels="4" fill="#111827" stroke="#ffffff" stroke-opacity="0.25" stroke-width="0.6">
-        <rect x="0.8" y="9.5" width="4.2" height="9" rx="1.7"/><rect x="25" y="9.5" width="4.2" height="9" rx="1.7"/>
-        <rect x="0.8" y="36" width="4.2" height="9" rx="1.7"/><rect x="25" y="36" width="4.2" height="9" rx="1.7"/>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 120" width="44" height="66">
+      <defs>
+        <linearGradient id="sdcBody${id}" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stop-color="#5b3fe0"/>
+          <stop offset="0.5" stop-color="#9a7bff"/>
+          <stop offset="1" stop-color="#5b3fe0"/>
+        </linearGradient>
+        <linearGradient id="sdcGlass${id}" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stop-color="#cfe4ff"/>
+          <stop offset="1" stop-color="#6f86c9"/>
+        </linearGradient>
+      </defs>
+      <ellipse cx="40" cy="64" rx="31" ry="52" fill="#000" opacity=".35"/>
+      <g data-wheels="4" fill="#0c0c12" stroke="#2b2b3a" stroke-width="1">
+        <rect x="8" y="22" width="9" height="20" rx="3.5"/>
+        <rect x="63" y="22" width="9" height="20" rx="3.5"/>
+        <rect x="8" y="80" width="9" height="20" rx="3.5"/>
+        <rect x="63" y="80" width="9" height="20" rx="3.5"/>
       </g>
-      <path d="M3 15 C3 5 8 1.5 15 1.5 C22 1.5 27 5 27 15 L27 46 C27 50.5 24.5 52.5 20 52.5 L10 52.5 C5.5 52.5 3 50.5 3 46 Z" fill="#7c5cff" stroke="#ffffff" stroke-width="1.5"/>
-      <path d="M6 19.5 C11 16.5 19 16.5 24 19.5 L22.5 26.5 C18 25 12 25 7.5 26.5 Z" fill="#1e1b4b" fill-opacity="0.9"/>
-      <rect x="7.5" y="27.5" width="15" height="14" rx="3" fill="#7c5cff" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1"/>
-      <path d="M8 43.5 C12 44.8 18 44.8 22 43.5 L21 48 C17.5 49 12.5 49 9 48 Z" fill="#1e1b4b" fill-opacity="0.9"/>
+      <path d="M17 44 q-7 1 -7 5 q0 3 7 3 z" fill="#6a4ff0"/>
+      <path d="M63 44 q7 1 7 5 q0 3 -7 3 z" fill="#6a4ff0"/>
+      <path d="M40 6 C56 6 64 16 64 34 L64 88 C64 106 56 114 40 114 C24 114 16 106 16 88 L16 34 C16 16 24 6 40 6 Z" fill="url(#sdcBody${id})" stroke="#ffffff" stroke-width="2.2"/>
+      <path d="M40 10 C52 10 58 18 58 30 L22 30 C22 18 28 10 40 10 Z" fill="#fff" opacity=".16"/>
+      <path d="M24 38 C24 34 30 31 40 31 C50 31 56 34 56 38 L53 52 L27 52 Z" fill="url(#sdcGlass${id})" stroke="#1a1f3a" stroke-width="1"/>
+      <rect x="25" y="52" width="30" height="26" rx="6" fill="#7e62f5" stroke="#4a33b8" stroke-width="1"/>
+      <rect x="29" y="56" width="22" height="8" rx="4" fill="#fff" opacity=".18"/>
+      <path d="M27 78 L53 78 L56 90 C56 93 50 95 40 95 C30 95 24 93 24 90 Z" fill="url(#sdcGlass${id})" stroke="#1a1f3a" stroke-width="1" opacity=".95"/>
+      <ellipse cx="26" cy="14" rx="5" ry="2.6" fill="#fff6c8"/>
+      <ellipse cx="54" cy="14" rx="5" ry="2.6" fill="#fff6c8"/>
+      <g data-taillights="2">
+        <rect x="21" y="106" width="9" height="3.2" rx="1.6" fill="#ff4d5e"/>
+        <rect x="50" y="106" width="9" height="3.2" rx="1.6" fill="#ff4d5e"/>
+      </g>
     </svg>`;
   return el;
 }
-
 /** The demo's soft pulse for the visitor's own car (none with reduced motion). */
 function ensureSimCSS() {
   if (document.getElementById("mb-sim-css")) return;
@@ -312,6 +338,8 @@ export function MapboxMap({
   preparedRef.current = prepared;
   const driveViewRef = useRef(driveView);
   driveViewRef.current = driveView;
+  const fitPaddingRef = useRef(fitPadding);
+  fitPaddingRef.current = fitPadding;
   // Demo ride and demo Go-online map: hidden until drawn, then faded in.
   const [shown, setShown] = useState(!prepared && !simulationArea);
   const onRouteStepsRef = useRef(onRouteSteps);
@@ -827,7 +855,11 @@ export function MapboxMap({
     }
     routeCoordsRef.current = pv.carRoute ?? [];
     if (containerRef.current) containerRef.current.dataset.lines = pv.lines.map((l) => l.id).join(",");
-    if (refit && !driveViewRef.current && pv.frame.length) map.fitBounds(boundsOf(mapboxgl, pv.frame), { padding: fitPadding, maxZoom: 15, duration: 0 });
+    if (refit && !driveViewRef.current && pv.frame.length) fitPrepared(map, pv);
+  }
+  /** Demo ride: frame the prepared view, level and north up (an overview). */
+  function fitPrepared(map: any, pv: PreparedView) {
+    map.fitBounds(boundsOf((window as any).mapboxgl, pv.frame), { padding: fitPaddingRef.current, maxZoom: 15, duration: 0, bearing: 0, pitch: 0 });
   }
   useEffect(() => {
     const map = mapRef.current;
@@ -835,6 +867,15 @@ export function MapboxMap({
     applyPrepared(map, prepared, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prepared]);
+  // Demo ride: framed again when the room around the view changes (e.g. the box
+  // the map shows through on the pickup overview).
+  const fitKey = JSON.stringify(fitPadding);
+  useEffect(() => {
+    const map = mapRef.current, pv = preparedRef.current;
+    if (!pv || !map || !mapReadyRef.current || driveViewRef.current || !pv.frame.length) return;
+    fitPrepared(map, pv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey]);
   // Demo ride: keep the map's drawing the size of its box (and the prepared view framed).
   useEffect(() => {
     const el = containerRef.current;
@@ -844,7 +885,7 @@ export function MapboxMap({
       if (!map) return;
       map.resize();
       const pv = preparedRef.current;
-      if (pv && pv.frame.length && !driveViewRef.current && mapReadyRef.current) map.fitBounds(boundsOf((window as any).mapboxgl, pv.frame), { padding: fitPadding, maxZoom: 15, duration: 0 });
+      if (pv && pv.frame.length && !driveViewRef.current && mapReadyRef.current) fitPrepared(map, pv);
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -855,7 +896,8 @@ export function MapboxMap({
   const tripMarkerRef = useRef<any>(null);
   const routeCumRef = useRef<{ coords: [number, number][]; cum: number[] } | null>(null);
   // Guidance view: where the camera started (for the tilt-in) and the eased heading.
-  const driveCamRef = useRef<{ t0: number; last: number; heading: number; from: { zoom: number; bearing: number; pitch: number } } | null>(null);
+  type Pad = { top: number; bottom: number; left: number; right: number };
+  const driveCamRef = useRef<{ t0: number; last: number; heading: number; from: { center: [number, number]; zoom: number; bearing: number; pitch: number; padding: Pad } } | null>(null);
   const driveOn = driveView != null;
   const driveBottom = driveView?.bottomPx ?? 0;
   const driveReduced = driveView?.reduced ?? false;
@@ -904,29 +946,33 @@ export function MapboxMap({
       const now = performance.now();
       let cam = driveCamRef.current;
       if (!cam) {
-        map.resize(); // the map just became full screen
+        // The move starts from whatever the map shows now (the route overview).
         if (map.getLayer("route")) map.setPaintProperty("route", "line-width", 9);
-        cam = driveCamRef.current = { t0: now, last: now, heading, from: { zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() } };
+        const c = map.getCenter(), pad = map.getPadding();
+        cam = driveCamRef.current = { t0: now, last: now, heading, from: { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), padding: { top: pad.top, bottom: pad.bottom, left: pad.left, right: pad.right } } };
       } else {
         // The map turns smoothly into each new road (instantly with reduced motion).
         const k = driveReduced ? 1 : 1 - Math.exp(-(now - cam.last) / 350);
         cam.heading += turn(cam.heading, heading) * k;
         cam.last = now;
       }
-      // The car stays put on the screen from the first frame; the map zooms,
-      // tilts and turns in around it (all at once with reduced motion).
+      // From the overview the camera eases over to the car while it zooms, tilts
+      // and turns in (all at once with reduced motion), then follows the car.
       const x = driveReduced ? 1 : Math.min(1, (now - cam.t0) / DRIVE_INTRO_MS);
       const e = x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2; // ease in-out
       const { from } = cam;
       const H = map.getContainer().clientHeight;
+      const mix = (a: number, b: number) => a + (b - a) * e;
       map.jumpTo({
-        center: at,
-        zoom: from.zoom + (DRIVE_ZOOM - from.zoom) * e,
+        center: [mix(from.center[0], at[0]), mix(from.center[1], at[1])],
+        zoom: mix(from.zoom, DRIVE_ZOOM),
         bearing: from.bearing + turn(from.bearing, cam.heading) * e,
-        pitch: from.pitch + (DRIVE_PITCH - from.pitch) * e,
+        pitch: mix(from.pitch, DRIVE_PITCH),
         // The car sits low on the screen: bottomPx above the bottom edge.
-        padding: { top: Math.max(0, H - 2 * driveBottom), bottom: 0, left: 0, right: 0 },
+        padding: { top: mix(from.padding.top, Math.max(0, H - 2 * driveBottom)), bottom: mix(from.padding.bottom, 0), left: mix(from.padding.left, 0), right: mix(from.padding.right, 0) },
       });
+      // For the demo test: the camera on this frame.
+      if (containerRef.current) containerRef.current.dataset.cam = JSON.stringify({ t: Math.round(now), zoom: +map.getZoom().toFixed(3), pitch: +map.getPitch().toFixed(2), bearing: +map.getBearing().toFixed(2), e: +e.toFixed(3) });
       if (!tripMarkerRef.current) {
         tripMarkerRef.current = new mapboxgl.Marker({ element: topDownCarEl(), rotationAlignment: "map", pitchAlignment: "map" }).setLngLat(at).addTo(map);
       }

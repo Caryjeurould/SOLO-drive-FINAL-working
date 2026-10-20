@@ -46,13 +46,14 @@ export function LegalDocViewer({
 
   return (
     <div className={cn("rounded-2xl border bg-card p-5 shadow-card", signed ? "border-success/30" : "border-border")}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Visitor demo: the badge always sits under the title, lined up with its text. */}
+      <div className={demo ? "flex flex-col items-start gap-2" : "flex flex-wrap items-center justify-between gap-3"}>
         <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-primary-glow" />
-          <h4 className="font-display text-base">{title}</h4>
+          <FileText className={cn("h-4 w-4 text-primary-glow", demo && "shrink-0")} />
+          <h4 data-testid={demo ? "legal-doc-title" : undefined} className="font-display text-base">{title}</h4>
         </div>
         {signed ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-1 text-[10px] uppercase tracking-widest text-success">
+          <span data-testid={demo ? "legal-doc-signed" : undefined} className={cn("inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-1 text-[10px] uppercase tracking-widest text-success", demo && "ml-6")}>
             <CheckCircle2 className="h-3 w-3" /> Signed
           </span>
         ) : (
