@@ -18,9 +18,9 @@ import {
   DEMO_ACCESS_FEE, DEMO_DEFAULT_NAME, DEMO_DOCS, DEMO_JOBS, DEMO_RIDE, DEMO_WEEK, DRIVE_VIEW, DEMO_WORK_DAYS, DEMO_WORK_WINDOW_HOURS, SIM_PICKUP_ADDRESS, SIM_ZOOM,
   countOf, demoBillingCycle, demoDate, demoWeekSoFar, markDemoGlidedBack, resetDemo, useDemoState,
 } from "@/lib/demo";
-import { MapboxMap } from "@/components/MapboxMap";
+import { DRIVE_INTRO_MS, MapboxMap } from "@/components/MapboxMap";
 import { Pill, generatePoNumber } from "@/components/SmartRateBooking";
-import { DemoRideScreen, playChime, type RidePhase } from "@/components/DemoRide";
+import { DemoRideScreen, playChime, unlockChime, type RidePhase } from "@/components/DemoRide";
 import { CsaPopup } from "@/components/CsaPopup";
 import { useOperatorProfile } from "@/hooks/useOperatorProfile";
 import {
@@ -138,7 +138,10 @@ function demoDailyHours(sessions: { started_at: string; ended_at: string | null 
 function scrollUnderHeader(el: HTMLElement | null) {
   if (!el) return;
   const header = document.querySelector("header")?.offsetHeight ?? 0;
-  window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - header - 8), behavior: reducedMotion() ? "auto" : "smooth" });
+  // Leave out a fade-in's slide (the block's resting place, not where it is mid-animation).
+  const tf = getComputedStyle(el).transform;
+  const slide = tf && tf !== "none" ? new DOMMatrixReadOnly(tf).m42 : 0;
+  window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top - slide + window.scrollY - header - 8), behavior: reducedMotion() ? "auto" : "smooth" });
 }
 
 function OperatorDashboard() {
@@ -198,10 +201,10 @@ function OperatorDashboard() {
 
   const demo = useIsVisitor();
   const chooseLocation = async (yes: boolean) => {
+    unlockChime(); // a tap: lets the ride offer's beeps play later
     setLocating(true);
     const center = yes ? await fetchApproxArea() : null;
     setLocating(false);
-    setAskLocation(false);
     setDemoArea({ center });
     pendingScroll.current = "map";
     goOnline.mutate(serviceType);
@@ -209,11 +212,23 @@ function OperatorDashboard() {
   // While the demo is online the dashboard shows only the status, the map and
   // the trip panel under it; Stop brings everything else back.
   const showMap = demo && online && !!demoArea;
+  // The online screen waits for its map: the map is made (out of sight, at its
+  // final size) while the location question shows its spinner, and the screen
+  // fades in once the map's cars are drawn (at the latest after 6 s).
+  const [mapReady, setMapReady] = useState(false);
+  const onlineShown = showMap && mapReady;
+  useEffect(() => {
+    if (!showMap) { setMapReady(false); return; }
+    if (mapReady) { setAskLocation(false); return; }
+    const t = window.setTimeout(() => setMapReady(true), 6000);
+    return () => window.clearTimeout(t);
+  }, [showMap, mapReady]);
+  const onSimReady = useCallback(() => setMapReady(true), []);
   // Online: glide so the whole map block sits under the header (once it's sized); stopped: back up to the Online card.
   useEffect(() => {
-    if (pendingScroll.current === "map" && showMap && onlineMapH != null) { pendingScroll.current = null; scrollUnderHeader(mapSectionRef.current); }
+    if (pendingScroll.current === "map" && onlineShown && onlineMapH != null) { pendingScroll.current = null; scrollUnderHeader(mapSectionRef.current); }
     else if (pendingScroll.current === "card" && !online) { pendingScroll.current = null; scrollUnderHeader(onlineCardRef.current); }
-  }, [showMap, online, onlineMapH]);
+  }, [onlineShown, online, onlineMapH]);
   useLayoutEffect(() => {
     if (!showMap) { setOnlineMapH(null); return; }
     const fit = () => {
@@ -227,8 +242,8 @@ function OperatorDashboard() {
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
   }, [showMap]);
-  // Demo only: the simulated ride. About 5 s after the online map opens a
-  // ride is offered (two soft beeps); Accept (or the countdown) makes the
+  // Demo only: the simulated ride. About 8 s after the online map shows a
+  // ride is offered (two beeps); Accept (or the countdown) makes the
   // Contracted Services Agreement; then the drive to the pickup; then the drive, the closing line, and the
   // whole demo starts over at the name screen. Stop, or leaving the page,
   // cancels whatever is pending (every timer below is cleared on cleanup).
@@ -248,7 +263,7 @@ function OperatorDashboard() {
   // comes after the usual few seconds.
   const declineRide = () => setRide({ phase: null, acceptedAt: null, poNumber: null });
   useEffect(() => {
-    if (!showMap) return;
+    if (!onlineShown) return;
     const after = (ms: number, fn: () => void) => { const t = window.setTimeout(fn, ms); return () => window.clearTimeout(t); };
     // Every step fades in, then holds, before its own time starts.
     const lead = DEMO_RIDE.phaseFadeMs + DEMO_RIDE.phaseHoldMs;
@@ -263,11 +278,13 @@ function OperatorDashboard() {
       case "csa":
         return after(lead + DEMO_RIDE.csaMs, () => setRide((r) => ({ ...r, phase: "pickup" })));
       case "pickup":
-        return after(lead + DEMO_RIDE.pickupOverviewMs + DEMO_RIDE.pickupLegMs + DEMO_RIDE.arrivedMs, () => { setRideProgress(0); setRide((r) => ({ ...r, phase: "drive" })); });
+        // The overview, the camera's move into navigation (the car still at the start), the leg, then "Arrived".
+        return after(lead + DEMO_RIDE.pickupOverviewMs + (DRIVE_VIEW === "guidance" && !rideReduced ? DRIVE_INTRO_MS : 0) + DEMO_RIDE.pickupLegMs + DEMO_RIDE.arrivedMs, () => { setRideProgress(0); setRide((r) => ({ ...r, phase: "drive" })); });
       case "drive": {
         // The car and the countdown follow the clock (from the end of the step's
-        // fade-in and hold); with reduced motion they jump in quarter steps.
-        const start = performance.now() + lead;
+        // fade-in and hold, and of the camera's move into navigation, so the car
+        // sets off from the very start); with reduced motion they jump in quarter steps.
+        const start = performance.now() + lead + (DRIVE_VIEW === "guidance" && !rideReduced ? DRIVE_INTRO_MS : 0);
         let raf = 0;
         const tick = () => {
           const p = Math.max(0, Math.min(1, (performance.now() - start) / (DRIVE_VIEW === "guidance" ? DEMO_RIDE.guidanceDriveMs : DEMO_RIDE.driveMs)));
@@ -299,7 +316,7 @@ function OperatorDashboard() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showMap, ride.phase]);
+  }, [onlineShown, ride.phase]);
 
   const simulationArea = useMemo(
     () => (demoArea ? { center: demoArea.center, address: SIM_PICKUP_ADDRESS, zoom: SIM_ZOOM, cars: 12 } : null),
@@ -418,7 +435,7 @@ function OperatorDashboard() {
     <AppShell onBack={demo && billingOpen ? closeBilling : undefined}>
       {demo && billingOpen ? (
         <DemoBillingScreen onBack={closeBilling} />
-      ) : showMap && ride.phase ? (
+      ) : onlineShown && ride.phase ? (
         <DemoRideScreen
           phase={ride.phase}
           operatorName={csaOperator}
@@ -432,7 +449,7 @@ function OperatorDashboard() {
         />
       ) : (
       <div className="mx-auto max-w-7xl px-4 py-10 md:px-8">
-        <header className={cn("flex flex-wrap items-end justify-between gap-4", showMap && "hidden")}>
+        <header className={cn("flex flex-wrap items-end justify-between gap-4", onlineShown && "hidden")}>
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Operator Console</div>
             <h1 className="mt-1 font-display text-4xl font-semibold">{greeting}, {displayName}</h1>
@@ -450,11 +467,11 @@ function OperatorDashboard() {
         </header>
 
         {/* Go online card */}
-        <section className={cn("grid gap-6", showMap ? "mt-2" : "mt-8 lg:grid-cols-[1.2fr_1fr]")}>
+        <section className={cn("grid gap-6", onlineShown ? "mt-2" : "mt-8 lg:grid-cols-[1.2fr_1fr]")}>
           <div className="flex min-w-0 flex-col gap-6">
           {/* Demo: the card itself doesn't clip (so Go online's round pulse is never cut
               off square); only its background glow is clipped, in a layer of its own. */}
-          <div ref={onlineCardRef} className={cn("relative rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated", !demo && "overflow-hidden", showMap && "pb-12")}>
+          <div ref={onlineCardRef} className={cn("relative rounded-3xl border border-border bg-gradient-surface p-6 shadow-elevated", !demo && "overflow-hidden", onlineShown && "pb-12")}>
             {demo ? (
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
                 <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-primary opacity-20 blur-3xl" />
@@ -469,7 +486,7 @@ function OperatorDashboard() {
                   <span className={cn("h-3 w-3 rounded-full", online ? "bg-success animate-pulse" : "bg-muted-foreground/40")} />
                   <span className="font-display text-3xl font-semibold">{online ? "Online & accepting" : "Offline"}</span>
                 </div>
-                <p className={cn("mt-2 max-w-md text-sm text-muted-foreground", showMap && "hidden")}>
+                <p className={cn("mt-2 max-w-md text-sm text-muted-foreground", onlineShown && "hidden")}>
                   {!accountActive
                     ? operator?.status === "terminated"
                       ? "Your account has been permanently terminated. Contact Compliance for details."
@@ -480,7 +497,7 @@ function OperatorDashboard() {
                 </p>
 
                 {online ? (
-                  <div className={cn("mt-4 flex flex-wrap items-center gap-2 text-xs", showMap && "hidden")}>
+                  <div className={cn("mt-4 flex flex-wrap items-center gap-2 text-xs", onlineShown && "hidden")}>
                     <span className="rounded-full bg-primary/10 px-2.5 py-1 capitalize text-primary-glow">
                       {activeShift?.service_type === "both" ? "Rideshare + Delivery" : activeShift?.service_type}
                     </span>
@@ -550,20 +567,20 @@ function OperatorDashboard() {
               </button>
             </div>
 
-            {askLocation && !online && (
+            {askLocation && !onlineShown && (
               <div role="dialog" aria-labelledby="demo-location-ask" className="relative mt-10 rounded-2xl border border-primary/30 bg-card/95 p-4 shadow-card">
                 <p id="demo-location-ask" className="text-sm">Permission requested to use your current location for simulation purposes only</p>
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => chooseLocation(true)}
-                    disabled={locating}
+                    disabled={locating || showMap}
                     className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-gradient-primary px-5 text-sm font-medium text-primary-foreground shadow-glow disabled:opacity-60"
                   >
-                    {locating && <Loader2 className="h-4 w-4 animate-spin" />} Yes
+                    {(locating || showMap) && <Loader2 className="h-4 w-4 animate-spin" />} Yes
                   </button>
                   <button
                     onClick={() => chooseLocation(false)}
-                    disabled={locating}
+                    disabled={locating || showMap}
                     className="min-h-10 rounded-xl border border-border bg-surface px-5 text-sm hover:bg-secondary disabled:opacity-60"
                   >
                     No
@@ -573,7 +590,7 @@ function OperatorDashboard() {
             )}
 
             {/* Guardrails */}
-            <div className={cn("relative mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4", showMap && "hidden")}>
+            <div className={cn("relative mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4", onlineShown && "hidden")}>
               <Guardrail
                 ok={accountActive}
                 icon={<ShieldCheck className="h-4 w-4" />}
@@ -605,7 +622,16 @@ function OperatorDashboard() {
               cars, street level), then the website trip card's rows and, where
               its Contracted Services card sits, "Waiting on request". */}
           {showMap && (
-            <div ref={mapSectionRef} data-testid="online-map" className="rounded-3xl border border-border bg-card p-3 shadow-card sm:p-4">
+            <div
+              ref={mapSectionRef}
+              data-testid="online-map"
+              data-shown={onlineShown ? "1" : undefined}
+              aria-hidden={onlineShown ? undefined : true}
+              className={cn(
+                "rounded-3xl border border-border bg-card p-3 shadow-card sm:p-4",
+                onlineShown ? "demo-step-in" : "pointer-events-none fixed inset-x-4 top-0 -z-10 opacity-0 md:inset-x-8",
+              )}
+            >
               <div className="mb-3 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
                 <span className="h-2 w-2 rounded-full bg-success motion-safe:animate-pulse" /> Online
                 <button
@@ -617,7 +643,7 @@ function OperatorDashboard() {
                 </button>
               </div>
               <div ref={mapBoxRef} style={{ height: onlineMapH ?? ONLINE_MAP_MIN_PX }}>
-                <MapboxMap className="h-full w-full" simulationArea={simulationArea} />
+                <MapboxMap className="h-full w-full" simulationArea={simulationArea} onSimReady={onSimReady} />
               </div>
               <div data-testid="online-trip-panel">
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -636,7 +662,7 @@ function OperatorDashboard() {
           </div>
 
           {/* Hours meter */}
-          <div className={cn("rounded-3xl border border-border bg-card p-6 shadow-card", showMap && "hidden")}>
+          <div className={cn("rounded-3xl border border-border bg-card p-6 shadow-card", onlineShown && "hidden")}>
             <div className="flex items-center justify-between">
               <div className="text-xs uppercase tracking-widest text-muted-foreground">Hours online this week</div>
               <div className="flex flex-wrap justify-end gap-1.5">
@@ -691,7 +717,7 @@ function OperatorDashboard() {
         </section>
 
         {/* Earnings */}
-        <section className={cn("mt-6 grid gap-6", demo ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3", showMap && "hidden")}>
+        <section className={cn("mt-6 grid gap-6", demo ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3", onlineShown && "hidden")}>
           <KPI icon={<DollarSign className="h-4 w-4" />} label="Earnings this week" value={money(weekEarnings)} />
           <KPI icon={<TrendingUp className="h-4 w-4" />} label="Average fare" value={money(avgFare)} />
           <KPI
@@ -712,7 +738,7 @@ function OperatorDashboard() {
         </section>
 
         {/* Subscription block + recent trips */}
-        <section className={cn("mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]", showMap && "hidden")}>
+        <section className={cn("mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]", onlineShown && "hidden")}>
           <div ref={billingCardRef} className="min-w-0 rounded-3xl border border-border bg-gradient-surface p-6 shadow-card">
             <div className="flex items-center justify-between">
               <div>

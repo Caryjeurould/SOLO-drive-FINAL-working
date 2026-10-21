@@ -50,6 +50,9 @@ type Props = {
   /** Operator demo ride: redraw the map whenever its box changes size (the
    *  ride steps give the map different heights). Off everywhere else. */
   resizeWithContainer?: boolean;
+  /** Demo Go-online map: called once its cars are drawn and it fades in (so the
+   *  screen can wait for it). Unset everywhere else. */
+  onSimReady?: () => void;
 };
 
 type LngLat = [number, number];
@@ -344,6 +347,7 @@ export function MapboxMap({
   driveView = null,
   prepared = null,
   resizeWithContainer = false,
+  onSimReady,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -367,6 +371,8 @@ export function MapboxMap({
   const [shown, setShown] = useState(!prepared && !simulationArea);
   const onRouteStepsRef = useRef(onRouteSteps);
   onRouteStepsRef.current = onRouteSteps;
+  const onSimReadyRef = useRef(onSimReady);
+  onSimReadyRef.current = onSimReady;
   // The route lookup and the map's own load race each other. The latest
   // "draw markers + route line + fit" step waits here until the map is ready
   // (its "load" handler has added the route layer), then runs exactly once —
@@ -812,6 +818,7 @@ export function MapboxMap({
       // The finished map and its cars fade in together.
       map.getContainer().dataset.simReady = "1";
       setShown(true);
+      onSimReadyRef.current?.();
 
       if (still || !cars.length) return; // reduced motion: cars stay still
       let last = performance.now();
@@ -983,45 +990,51 @@ export function MapboxMap({
       const [p0, p1] = d + look <= total ? [at, pointAt(d + look)] : [pointAt(Math.max(0, total - look)), pointAt(total)];
       const heading = (Math.atan2((p1[0] - p0[0]) * Math.cos((p0[1] * Math.PI) / 180), p1[1] - p0[1]) * 180) / Math.PI;
       const turn = (a: number, b: number) => ((((b - a) % 360) + 540) % 360) - 180; // shortest a → b
-      const now = performance.now();
-      let cam = driveCamRef.current;
-      if (!cam) {
-        // The move starts from whatever the map shows now (the route overview).
-        if (map.getLayer("route")) map.setPaintProperty("route", "line-width", 9);
-        const c = map.getCenter(), pad = map.getPadding();
-        cam = driveCamRef.current = { t0: now, last: now, heading, from: { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), padding: { top: pad.top, bottom: pad.bottom, left: pad.left, right: pad.right } } };
-      } else {
-        // The map turns smoothly into each new road (instantly with reduced motion).
-        const k = driveReduced ? 1 : 1 - Math.exp(-(now - cam.last) / 350);
-        cam.heading += turn(cam.heading, heading) * k;
-        cam.last = now;
-      }
-      // From the overview the camera eases over to the car while it zooms, tilts
-      // and turns in (all at once with reduced motion), then follows the car.
-      const x = driveReduced ? 1 : Math.min(1, (now - cam.t0) / DRIVE_INTRO_MS);
-      const e = x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2; // ease in-out
-      const { from } = cam;
-      const H = map.getContainer().clientHeight;
-      const mix = (a: number, b: number) => a + (b - a) * e;
-      // The car's distance from the centre shrinks evenly on screen while the zoom
-      // grows (scaled back to map units at this zoom), so the car and the road
-      // around it stay in view through the whole move.
-      const zoom = mix(from.zoom, DRIVE_ZOOM), k = (1 - e) * 2 ** (from.zoom - zoom);
-      map.jumpTo({
-        center: [at[0] + (from.center[0] - at[0]) * k, at[1] + (from.center[1] - at[1]) * k],
-        zoom,
-        bearing: from.bearing + turn(from.bearing, cam.heading) * e,
-        pitch: mix(from.pitch, DRIVE_PITCH),
-        // The car sits low on the screen: bottomPx above the bottom edge.
-        padding: { top: mix(from.padding.top, Math.max(0, H - 2 * driveBottom)), bottom: mix(from.padding.bottom, 0), left: mix(from.padding.left, 0), right: mix(from.padding.right, 0) },
-      });
-      // For the demo test: the camera on this frame.
-      if (containerRef.current) containerRef.current.dataset.cam = JSON.stringify({ t: Math.round(now), zoom: +map.getZoom().toFixed(3), pitch: +map.getPitch().toFixed(2), bearing: +map.getBearing().toFixed(2), e: +e.toFixed(3) });
-      if (!tripMarkerRef.current) {
-        tripMarkerRef.current = new mapboxgl.Marker({ element: topDownCarEl(), rotationAlignment: "map", pitchAlignment: "map" }).setLngLat(at).addTo(map);
-      }
-      tripMarkerRef.current.setLngLat(at).setRotation(cam.heading);
-      return;
+      // Each frame of the move is drawn, also while the car waits at the start.
+      let raf = 0;
+      const frame = () => {
+        const now = performance.now();
+        let cam = driveCamRef.current;
+        if (!cam) {
+          // The move starts from whatever the map shows now (the route overview).
+          if (map.getLayer("route")) map.setPaintProperty("route", "line-width", 9);
+          const c = map.getCenter(), pad = map.getPadding();
+          cam = driveCamRef.current = { t0: now, last: now, heading, from: { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), padding: { top: pad.top, bottom: pad.bottom, left: pad.left, right: pad.right } } };
+        } else {
+          // The map turns smoothly into each new road (instantly with reduced motion).
+          const k = driveReduced ? 1 : 1 - Math.exp(-(now - cam.last) / 350);
+          cam.heading += turn(cam.heading, heading) * k;
+          cam.last = now;
+        }
+        // From the overview the camera eases over to the car while it zooms, tilts
+        // and turns in (all at once with reduced motion), then follows the car.
+        const x = driveReduced ? 1 : Math.min(1, (now - cam.t0) / DRIVE_INTRO_MS);
+        const e = x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2; // ease in-out
+        const { from } = cam;
+        const H = map.getContainer().clientHeight;
+        const mix = (a: number, b: number) => a + (b - a) * e;
+        // The car's distance from the centre shrinks evenly on screen while the zoom
+        // grows (scaled back to map units at this zoom), so the car and the road
+        // around it stay in view through the whole move.
+        const zoom = mix(from.zoom, DRIVE_ZOOM), k = (1 - e) * 2 ** (from.zoom - zoom);
+        map.jumpTo({
+          center: [at[0] + (from.center[0] - at[0]) * k, at[1] + (from.center[1] - at[1]) * k],
+          zoom,
+          bearing: from.bearing + turn(from.bearing, cam.heading) * e,
+          pitch: mix(from.pitch, DRIVE_PITCH),
+          // The car sits low on the screen: bottomPx above the bottom edge.
+          padding: { top: mix(from.padding.top, Math.max(0, H - 2 * driveBottom)), bottom: mix(from.padding.bottom, 0), left: mix(from.padding.left, 0), right: mix(from.padding.right, 0) },
+        });
+        // For the demo test: the camera on this frame.
+        if (containerRef.current) containerRef.current.dataset.cam = JSON.stringify({ t: Math.round(now), zoom: +map.getZoom().toFixed(3), pitch: +map.getPitch().toFixed(2), bearing: +map.getBearing().toFixed(2), e: +e.toFixed(3) });
+        if (!tripMarkerRef.current) {
+          tripMarkerRef.current = new mapboxgl.Marker({ element: topDownCarEl(), rotationAlignment: "map", pitchAlignment: "map" }).setLngLat(at).addTo(map);
+        }
+        tripMarkerRef.current.setLngLat(at).setRotation(cam.heading);
+        if (x < 1) raf = requestAnimationFrame(frame);
+      };
+      frame();
+      return () => cancelAnimationFrame(raf);
     }
     if (!tripMarkerRef.current) {
       ensureSimCSS();

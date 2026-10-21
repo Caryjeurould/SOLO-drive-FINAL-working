@@ -26,28 +26,50 @@ const PILL_BELOW_CAR_PX = 32;
 /** Sample speed on the navigation screens (not real data). */
 const SAMPLE_MPH = 35;
 
+// One sound context for the demo, made (or woken) on the visitor's Go online
+// tap: a context first made later, from a timer, can start suspended or need a
+// moment to start, so the first beep was lost and only one weak beep was heard.
+let chimeCtx: AudioContext | null = null;
+function chimeContext(): AudioContext | null {
+  if (!chimeCtx) {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return null;
+    chimeCtx = new Ctx();
+  }
+  if (chimeCtx.state === "suspended") chimeCtx.resume().catch(() => {});
+  return chimeCtx;
+}
+/** Call from a tap (Go online), so the ride offer's beeps can play later. */
+export function unlockChime() {
+  try { chimeContext(); } catch { /* no sound */ }
+}
+
 /** Two short beeps with a short gap, made with Web Audio (no audio file). Silent if audio isn't available or is blocked. */
 export function playChime() {
   try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const now = ctx.currentTime;
-    // Two clear beeps (0.18 s each) with a short gap; peak gain 0.4 keeps the sine well below clipping.
-    for (const at of [0, 0.32]) {
-      const gain = ctx.createGain();
-      gain.connect(ctx.destination);
-      gain.gain.setValueAtTime(0.0001, now + at);
-      gain.gain.exponentialRampToValueAtTime(0.4, now + at + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.18);
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.value = 988;
-      osc.connect(gain);
-      osc.start(now + at);
-      osc.stop(now + at + 0.2);
-    }
-    window.setTimeout(() => { ctx.close().catch(() => {}); }, 900);
+    const ctx = chimeContext();
+    if (!ctx) return;
+    const play = () => {
+      // A moment ahead, so the first beep is never cut by the audio starting up.
+      const now = ctx.currentTime + 0.05;
+      // Two clear beeps (0.2 s each, held near the peak) with a short gap; peak gain 0.55 keeps the sine below clipping.
+      for (const at of [0, 0.34]) {
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(0.0001, now + at);
+        gain.gain.exponentialRampToValueAtTime(0.55, now + at + 0.015);
+        gain.gain.setValueAtTime(0.55, now + at + 0.11);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.2);
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = 988;
+        osc.connect(gain);
+        osc.start(now + at);
+        osc.stop(now + at + 0.21);
+      }
+    };
+    if (ctx.state === "running") play();
+    else ctx.resume().then(play, () => {});
   } catch {
     // No sound; the offer still shows.
   }
@@ -99,9 +121,10 @@ export function DemoRideScreen({
   const easeMs = reduced ? 0 : DRIVE_INTRO_MS;
   // On the way to pickup: the overview of the green route (DEMO_RIDE.pickupOverviewMs,
   // after the fade-in and hold), then — on the same map — the camera eases into the
-  // drive's navigation view while the car drives the leg over DEMO_RIDE.pickupLegMs,
-  // then "Arrived at pickup"; quarter steps with reduced motion. legNav: the move
-  // has begun; legSettled: it has finished (the screen is then the navigation screen).
+  // drive's navigation view with the car still at the start of the leg, then the car
+  // drives the whole leg over DEMO_RIDE.pickupLegMs, then "Arrived at pickup"; quarter
+  // steps with reduced motion. legNav: the move has begun; legSettled: it has finished
+  // (the screen is then the navigation screen).
   const pickupLeg = phase === "pickup";
   const [legP, setLegP] = useState(0);
   const [legNav, setLegNav] = useState(false);
@@ -117,9 +140,9 @@ export function DemoRideScreen({
       const now = performance.now();
       if (guidance && now >= start) setLegNav(true);
       if (guidance && now >= start + easeMs) setLegSettled(true);
-      const p = Math.max(0, Math.min(1, (now - start) / r.pickupLegMs));
+      const p = Math.max(0, Math.min(1, (now - start - easeMs) / r.pickupLegMs));
       setLegP(reduced && p < 1 ? Math.floor(p * 4) / 4 : p);
-      if (p < 1 || now < start + easeMs) raf = requestAnimationFrame(tick);
+      if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -191,9 +214,10 @@ export function DemoRideScreen({
     : next.name || steps.slice(nextIdx + 1).find((s) => s.name)?.name || endStreet; // no name: the next road
   const turnRef2 = next && next.type !== "arrive" && next.name ? next.ref.split(";")[0] : "";
   const turnMi = next ? Math.max(0, next.startFrac - navP) * navMi : navMi * navLeft;
-  // The street the car is on now (the step it is driving), for the pill under the car.
+  // The street the car is on now (the step it is driving), for the pill under the car;
+  // at the very start (an unnamed first step) the road it sets off on.
   const onIdx = steps.length ? Math.max(0, (nextIdx < 0 ? steps.length : nextIdx) - 1) : -1;
-  const onStreet = onIdx >= 0 ? steps[onIdx].name || steps[onIdx].ref.split(";")[0] || steps.slice(0, onIdx).reverse().find((s) => s.name)?.name || "" : "";
+  const onStreet = onIdx >= 0 ? steps[onIdx].name || steps[onIdx].ref.split(";")[0] || steps.slice(0, onIdx).reverse().find((s) => s.name)?.name || steps.slice(onIdx + 1).find((s) => s.name)?.name || "" : "";
   // Call / Message on the bottom card: a short notice only (nothing is dialled or
   // sent, and no timer changes).
   const [toast, setToast] = useState<{ text: string; top: number } | null>(null);
@@ -621,7 +645,8 @@ export function DemoRideScreen({
             <ContractedServicesCard
               cardRef={csaRef}
               className={cn("mt-6 scroll-mb-6 scroll-mt-24", magnify && "animate-csa-magnify relative z-10")}
-              style={magnify ? ({ "--csa-scale": window.innerWidth < 640 ? "1.035" : "1.12" } as React.CSSProperties) : undefined}
+              // The website's magnify, timed to settle just before the pickup starts.
+              style={magnify ? ({ "--csa-scale": window.innerWidth < 640 ? "1.035" : "1.12", animationDuration: `${(r.csaMs - 400) / 1000}s` } as React.CSSProperties) : undefined}
               onAnimationEnd={(e) => { if (e.target === e.currentTarget) setMagnify(false); }}
               confirmation={acceptedAt != null && poNumber ? { at: acceptedAt, poNumber, operatorEtaMin: r.operatorEtaMin } : null}
               text={csaAgreementText(r.customer, operatorName, r.rate.total)}

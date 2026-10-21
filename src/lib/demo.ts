@@ -105,7 +105,7 @@ export const SIM_PICKUP_ADDRESS = "1333 Camelback Rd, Phoenix, AZ";
 /** The website simulation's drop-off. */
 export const SIM_DROPOFF_ADDRESS = "14765 Scottsdale Rd, Scottsdale, AZ";
 
-/** The Operator demo's one simulated ride, offered about 5 s after the
+/** The Operator demo's one simulated ride, offered about 8 s after the
  *  Go-online map opens: the website simulation's trip (16.6 mi / 29 min) for
  *  Customer Linda K., at a locked $34.50 Smart+Rate™ ($4.50 base + $27.10
  *  distance + $2.90 fuel index = $34.50, ×1.09). Timings in ms; the ride
@@ -120,32 +120,35 @@ export const DEMO_RIDE = {
   tripMi: 16.6,
   tripMin: 29,
   rate: { base: 4.5, distance: 27.1, fuelAdj: 2.9, peakAdj: 0, weekendAdj: 0, eventAdj: 0, total: 34.5, multiplier: 1.09 },
-  /** Online and waiting, until the request comes in (two soft beeps). */
-  offerAfterMs: 5000,
+  /** Online and waiting (the cars driving on the map, from the moment it shows), until the request comes in (two beeps). */
+  offerAfterMs: 8000,
   /** Every ride step fades in over phaseFadeMs, then holds phaseHoldMs before
    *  anything on it starts or advances; the times below run after that. */
   phaseFadeMs: 400,
   phaseHoldMs: 1000,
-  /** "Incoming ride request", then the offer. */
-  requestMs: 2600,
-  /** The offer's countdown: Accept, or auto-accept at zero (it holds while the
+  /** "Incoming ride request" (about 3 s on screen), then the offer. */
+  requestMs: 1600,
+  /** The offer's countdown (about 6 s on screen): Accept, or auto-accept at zero (it holds while the
    *  visitor touches or scrolls the Smart+Rate™ breakdown, until 3 s after). */
-  autoAcceptMs: 7000,
+  autoAcceptMs: 4600,
   /** Where the Operator starts: about 4.6 driving miles from the pickup
    *  (Mapbox Directions: 4.67 mi). */
   operatorStart: "4300 N 16th St, Phoenix, AZ",
-  /** On the way to pickup: the overview of the green route first, then the
-   *  navigation view while the car drives it (sped up, like the trip), then
-   *  "Arrived at pickup". */
-  pickupOverviewMs: 2000,
-  pickupLegMs: 8000,
-  arrivedMs: 3500,
-  /** The Contracted Services card grows and settles back (6.2 s), then the drive starts. */
-  csaMs: 8600,
+  /** On the way to pickup: the overview of the green route first (about 2 s on
+   *  screen), then the camera moves into the navigation view (1 s, the car still
+   *  at the start), then the car drives the whole leg (sped up, like the trip),
+   *  then "Arrived at pickup". */
+  pickupOverviewMs: 600,
+  pickupLegMs: 20000,
+  arrivedMs: 2000,
+  /** The Contracted Services card grows and settles back, then the pickup starts (about 7 s on screen). */
+  csaMs: 5600,
   /** The drive in the "classic" view (map + Distance / Trip ETA / Arrival rows). */
   driveMs: 13000,
-  /** The drive in the "guidance" view (turn-by-turn navigation screen). */
-  guidanceDriveMs: 20000,
+  /** The drive in the "guidance" view (turn-by-turn navigation screen): the trip's
+   *  overview through the fade-in and hold, the 1 s move into navigation (the car
+   *  still at the start), then the car drives the whole trip. */
+  guidanceDriveMs: 35000,
   /** "Trip complete" with the earnings, then the closing line, then the reset. */
   completeMs: 3600,
   thanksMs: 2700,
