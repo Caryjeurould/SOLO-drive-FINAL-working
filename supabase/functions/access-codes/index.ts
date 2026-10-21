@@ -12,9 +12,7 @@ const SERVER_KEY_SHA256 = "ee496481b999b5810566c22e91408e48b8e76f44cebeaedbdab10
 const ADMIN_KEY_SHA256 = "eb9025ecdf3f00eb7999371c270ba34c07199db0e367922ec1adf1e3e868cf45";
 
 const OPENINGS = 2;
-const OPENING_MS = 30 * 60 * 1000; // one sign-in lasts about 30 minutes
-const ACTIVE_MS = 48 * 60 * 60 * 1000; // from the first sign-in
-const UNUSED_MS = 7 * 24 * 60 * 60 * 1000; // a code never used
+const ACTIVE_MS = 48 * 60 * 60 * 1000; // from the first sign-in, a hard stop (an unused code never expires)
 
 // 8 characters, uppercase letters and digits without 0, O, 1, I or L.
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -48,12 +46,12 @@ function newCode(): string {
 
 type Row = { code_hash: string; label: string; openings_used: number; created_at: string; first_signin_at: string | null; status: string };
 
-/** The status as of now (a code past its dates reads "expired") and when it stops working. */
+/** The status as of now (48 hours after the first sign-in it reads "expired") and when it stops
+ *  working: null for an unused code, which never expires. */
 function current(r: Row, now: number): { status: string; expires: number | null } {
-  const first = r.first_signin_at ? Date.parse(r.first_signin_at) : null;
-  const expires = first === null ? Date.parse(r.created_at) + UNUSED_MS : first + ACTIVE_MS;
-  if (r.status !== "active") return { status: r.status, expires: r.status === "used" ? Math.min(expires, now) : expires };
-  return { status: now >= expires ? "expired" : "active", expires };
+  const expires = r.first_signin_at ? Date.parse(r.first_signin_at) + ACTIVE_MS : null;
+  if (r.status !== "active") return { status: r.status, expires: null };
+  return { status: expires !== null && now >= expires ? "expired" : "active", expires };
 }
 
 async function signIn(code: string) {
@@ -74,7 +72,10 @@ async function signIn(code: string) {
     .update({ openings_used: n, first_signin_at: first, status: n >= OPENINGS ? "used" : "active" })
     .eq("code_hash", h).eq("openings_used", r.openings_used).eq("status", "active").select("code_hash");
   if (!done?.length) return { ok: false };
-  return { ok: true, opening: n, expires: Math.min(now + OPENING_MS, Date.parse(first) + ACTIVE_MS) };
+  // The opening itself ends on the site after 30 idle minutes; hardEnd is its hard stop.
+  // (expires: the same with the previous 30-minute cap, for the site version before idle openings.)
+  const hardEnd = Date.parse(first) + ACTIVE_MS;
+  return { ok: true, opening: n, hardEnd, expires: Math.min(now + 30 * 60 * 1000, hardEnd) };
 }
 
 async function admin(body: Record<string, unknown>) {
@@ -95,7 +96,7 @@ async function admin(body: Record<string, unknown>) {
       const { data, error } = await db.from("access_codes").select("*").order("created_at");
       if (error) return { ok: false, error: error.message };
       const now = Date.now();
-      return { ok: true, codes: (data as Row[]).map((r) => { const c = current(r, now); return { label: r.label, openings_used: r.openings_used, status: c.status, created_at: r.created_at, first_signin_at: r.first_signin_at, expires: c.expires && new Date(c.expires).toISOString() }; }) };
+      return { ok: true, codes: (data as Row[]).map((r) => { const c = current(r, now); return { label: r.label, openings_used: r.openings_used, status: c.status, created_at: r.created_at, first_signin_at: r.first_signin_at, expires: c.expires === null ? null : new Date(c.expires).toISOString() }; }) };
     }
     case "cancel": {
       const { data, error } = await db.from("access_codes").update({ status: "cancelled" }).eq("label", label).select("label");

@@ -67,22 +67,79 @@ export function useVisitorDemo(): boolean {
   return active && computer;
 }
 
-/** Signed in with a temporary access code: when this opening ends (the time
- *  left comes from the server, so the phone's clock doesn't matter), reload,
- *  and the server shows the password page again. */
+/** How often at most the page tells the server the visitor is still active. */
+const ALIVE_EVERY_MS = 60 * 1000;
+/** Renewed this long before the end (the browser drops the cookie at the end itself). */
+const RENEW_BEFORE_MS = 10 * 1000;
+
+/** Signed in with a temporary access code: the visitor's taps, scrolls and key
+ *  presses keep the opening alive (the server renews its cookie, at most once a
+ *  minute); when it ends (30 idle minutes, or the code's 48 hours) the page
+ *  reloads and the server shows the password page again. The time left always
+ *  comes from the server, so the phone's clock doesn't matter. Nothing is saved
+ *  and the database is never asked. */
 export function useCodeSessionEnd() {
   useEffect(() => {
     const m = document.cookie.match(new RegExp(`(?:^|;\\s*)${CODE_LEFT_COOKIE}=(\\d+)(?:;|$)`));
     if (!m) return;
-    const left = Number(m[1]) + 500; // a moment past the end, so the server sees it ended
-    const end = Date.now() + left;
-    const t = window.setTimeout(() => window.location.reload(), left);
-    // A phone may pause the timer while the tab is hidden: check on return.
-    const check = () => { if (document.visibilityState === "visible" && Date.now() >= end) window.location.reload(); };
-    document.addEventListener("visibilitychange", check);
+    let end = 0;
+    let timer = 0;
+    let lastPing = 0;
+    let lastActivity = Date.now();
+    let pinging = false;
+    const reload = () => window.location.reload();
+    const schedule = (left: number) => {
+      end = Date.now() + left + 500; // a moment past the end, so the server sees it ended
+      window.clearTimeout(timer);
+      timer = window.setTimeout(due, Math.max(left - RENEW_BEFORE_MS, 0));
+    };
+    const reloadAtEnd = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(reload, Math.max(end - Date.now(), 0));
+    };
+    const ping = async () => {
+      if (pinging) return;
+      pinging = true;
+      lastPing = Date.now();
+      try {
+        // How long ago the last tap was, so the 30 idle minutes count from it.
+        const idle = Date.now() - lastActivity;
+        const r = await fetch("/__alive", { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idle }) });
+        const left = r.ok ? Number((await r.json()).left) : 0;
+        if (left > 0) schedule(left);
+        else reload();
+      } catch {
+        reloadAtEnd(); // offline for a moment: the opening still ends on time
+      } finally {
+        pinging = false;
+      }
+    };
+    // Just before the end: if the visitor was active since the last renewal, renew
+    // (from that activity); otherwise the opening ends.
+    function due() {
+      if (lastActivity > lastPing) void ping();
+      else reloadAtEnd();
+    }
+    const active = () => {
+      lastActivity = Date.now();
+      if (Date.now() >= end) reload();
+      else if (Date.now() - lastPing >= ALIVE_EVERY_MS) void ping();
+    };
+    // Back from sleep or a hidden tab after the end: straight to the password page.
+    const back = () => { if (document.visibilityState === "visible" && Date.now() >= end) reload(); };
+    schedule(Number(m[1]));
+    void ping(); // opening (or reloading) the page counts as activity
+    const events = ["pointerdown", "keydown", "wheel", "touchstart", "scroll"] as const;
+    for (const e of events) window.addEventListener(e, active, { capture: true, passive: true });
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("pageshow", back);
+    window.addEventListener("focus", back);
     return () => {
-      window.clearTimeout(t);
-      document.removeEventListener("visibilitychange", check);
+      window.clearTimeout(timer);
+      for (const e of events) window.removeEventListener(e, active, { capture: true });
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("pageshow", back);
+      window.removeEventListener("focus", back);
     };
   }, []);
 }

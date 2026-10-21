@@ -38,31 +38,44 @@ const VISITOR_TOKEN = VISITOR_PASSWORD
 
 // Temporary access codes (visitors): checked and counted by the access-codes
 // Supabase Edge Function, which alone can reach their table. A sign-in with a
-// code gets a cookie signed here (keyed with APP_PASSWORD) that ends with the
-// opening (about 30 minutes); it then gets the password page again. Without
-// CODES_KEY there are no code sign-ins.
+// code gets a cookie signed here (keyed with APP_PASSWORD) that ends after 30
+// idle minutes, renewed by the page while the visitor uses it (/__alive), and
+// at the latest 48 hours after the code's first sign-in; then the password
+// page again. Without CODES_KEY there are no code sign-ins.
 const CODES_KEY = process.env.CODES_KEY || null;
 const CODES_URL = process.env.VITE_SUPABASE_URL ? `${process.env.VITE_SUPABASE_URL.replace(/\/$/, "")}/functions/v1/access-codes` : null;
 const CODE_SIGNING_KEY = PASSWORD ? createHmac("sha256", PASSWORD).update("solo-auth:v1:code").digest() : null;
+/** An opening ends after this long without a tap, scroll or key press (CODE_IDLE_MS shortens it for tests). */
+const IDLE_MS = Number(process.env.CODE_IDLE_MS) || 30 * 60 * 1000;
 /** 8 characters, uppercase letters and digits without 0, O, 1, I or L (typed in any case, spaces and dashes ignored). */
 const CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/;
 const normalizeCode = (typed: string) => typed.toUpperCase().replace(/[\s-]/g, "");
 
+type CodeSession = { opening: number; hardEnd: number; idleEnd: number };
 const codeSignature = (body: string) => createHmac("sha256", CODE_SIGNING_KEY!).update(body).digest("base64url");
-const codeToken = (opening: number, expires: number) => {
-  const body = `c1.${opening}.${expires}`;
-  return `${body}.${codeSignature(body)}`;
-};
-/** When a code sign-in's cookie ends (ms), or null if it isn't one, is forged or has ended. */
-function codeSessionEnd(cookie: string): number | null {
-  const m = /^(c1\.\d\.(\d{13}))\.([\w-]+)$/.exec(cookie);
-  if (!m || !CODE_SIGNING_KEY || !safeEqual(m[3], codeSignature(m[1]))) return null;
-  const end = Number(m[2]);
-  return end > Date.now() ? end : null;
+const codeEnds = (s: CodeSession) => Math.min(s.hardEnd, s.idleEnd);
+/** The code sign-in in this cookie, or null if it isn't one, is forged or has ended. */
+function codeSession(cookie: string): CodeSession | null {
+  const m = /^(c2\.(\d)\.(\d{13})\.(\d{13}))\.([\w-]+)$/.exec(cookie);
+  if (!m || !CODE_SIGNING_KEY || !safeEqual(m[5], codeSignature(m[1]))) return null;
+  const s = { opening: Number(m[2]), hardEnd: Number(m[3]), idleEnd: Number(m[4]) };
+  return codeEnds(s) > Date.now() ? s : null;
 }
-
-/** Asks the Edge Function to count an opening for this code. */
-async function signInWithCode(code: string): Promise<{ opening: number; expires: number } | null> {
+/** Starts or renews the opening: 30 idle minutes from the visitor's last activity
+ *  (`idleMs` ago, as the page reports it), never past the hard stop. Returns the ms left. */
+function setCodeCookies(event: Parameters<typeof getCookie>[0], opening: number, hardEnd: number, idleMs = 0): number {
+  const now = Date.now();
+  const s = { opening, hardEnd, idleEnd: now + IDLE_MS - Math.min(Math.max(idleMs, 0), IDLE_MS) };
+  const left = codeEnds(s) - now;
+  const body = `c2.${opening}.${hardEnd}.${s.idleEnd}`;
+  const options = { ...COOKIE_OPTIONS, maxAge: Math.ceil(left / 1000) };
+  setCookie(event, COOKIE_NAME, `${body}.${codeSignature(body)}`, { ...options, httpOnly: true });
+  setCookie(event, ROLE_COOKIE, "visitor", options);
+  setCookie(event, CODE_LEFT_COOKIE, String(left), options);
+  return left;
+}
+/** Asks the Edge Function to count an opening for this code; its hard stop (ms). */
+async function signInWithCode(code: string): Promise<{ opening: number; hardEnd: number } | null> {
   if (!CODES_KEY || !CODES_URL || !CODE_SIGNING_KEY) return null;
   try {
     const r = await fetch(CODES_URL, {
@@ -71,13 +84,12 @@ async function signInWithCode(code: string): Promise<{ opening: number; expires:
       body: JSON.stringify({ action: "signin", code }),
       signal: AbortSignal.timeout(8000),
     });
-    const j = (await r.json()) as { ok?: boolean; opening?: number; expires?: number };
-    return r.ok && j.ok && typeof j.opening === "number" && typeof j.expires === "number" && j.expires > Date.now() ? { opening: j.opening, expires: j.expires } : null;
+    const j = (await r.json()) as { ok?: boolean; opening?: number; hardEnd?: number };
+    return r.ok && j.ok && typeof j.opening === "number" && typeof j.hardEnd === "number" && j.hardEnd > Date.now() ? { opening: j.opening, hardEnd: j.hardEnd } : null;
   } catch {
     return null;
   }
 }
-
 /** Constant-time string comparison (hashing first makes the lengths equal). */
 function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
@@ -105,20 +117,31 @@ export default defineEventHandler(async (event) => {
   }
 
   const cookie = getCookie(event, COOKIE_NAME);
-  const codeEnd = cookie?.startsWith("c1.") ? codeSessionEnd(cookie) : null;
+  const isCodeCookie = !!cookie && /^c\d\./.test(cookie);
+  const session = isCodeCookie ? codeSession(cookie!) : null;
   const role: SiteRole | null = !cookie
     ? null
     : safeEqual(cookie, AUTH_TOKEN)
       ? "admin"
-      : (VISITOR_TOKEN && safeEqual(cookie, VISITOR_TOKEN)) || codeEnd !== null
+      : (VISITOR_TOKEN && safeEqual(cookie, VISITOR_TOKEN)) || session !== null
         ? "visitor"
         : null;
-  if (cookie?.startsWith("c1.") && codeEnd === null) {
+  if (isCodeCookie && session === null) {
     // The opening has ended: back to the password page, signed out.
     for (const name of [COOKIE_NAME, ROLE_COOKIE, CODE_LEFT_COOKIE]) setCookie(event, name, "", { ...COOKIE_OPTIONS, maxAge: 0 });
   }
-  if (codeEnd !== null) {
-    const left = codeEnd - Date.now();
+  // The page reports the visitor's taps, scrolls and key presses: 30 more idle minutes.
+  if (path === "/__alive" && event.method === "POST") {
+    const idle = Number((await readBody<{ idle?: unknown }>(event).catch(() => null))?.idle) || 0;
+    const left = session ? setCodeCookies(event, session.opening, session.hardEnd, idle) : 0;
+    if (left <= 0) {
+      setResponseStatus(event, 401);
+      return { left: 0 };
+    }
+    return { left };
+  }
+  if (session) {
+    const left = codeEnds(session) - Date.now();
     setCookie(event, CODE_LEFT_COOKIE, String(left), { ...COOKIE_OPTIONS, maxAge: Math.ceil(left / 1000) });
   }
   if (role) {
@@ -150,11 +173,7 @@ export default defineEventHandler(async (event) => {
     if (CODE_RE.test(code)) {
       const opening = await signInWithCode(code);
       if (!opening) return html(passwordHtml("code", next));
-      const left = opening.expires - Date.now();
-      const options = { ...COOKIE_OPTIONS, maxAge: Math.ceil(left / 1000) };
-      setCookie(event, COOKIE_NAME, codeToken(opening.opening, opening.expires), { ...options, httpOnly: true });
-      setCookie(event, ROLE_COOKIE, "visitor", options);
-      setCookie(event, CODE_LEFT_COOKIE, String(left), options);
+      setCodeCookies(event, opening.opening, opening.hardEnd);
       return sendRedirect(event, next, 302);
     }
     return html(passwordHtml("password", next));
